@@ -264,14 +264,14 @@ export const SCENES: Record<string, Scene> = {
     description: '卡利阿斯宅邸中你的居室。克利奈床榻、青铜镜、蓝色帷幕，爱奥尼柱映着晨光。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['床榻', '青铜镜', '木箱', '窗台'],
-    backgroundImage: '/scenes/bedroom.jpg',
+    backgroundImage: '/scenes/bedroom.png',
   },
   symposium: {
     id: 'symposium', name: '酒宴厅', icon: '🍷',
     description: '半环形卧榻排列的宴饮大厅。油灯摇曳，红墙绘满神话故事，酒杯碰撞声不绝。',
     possibleCharacters: ['kallias', 'philokles'],
     searchableAreas: ['卧榻', '酒案', '壁画', '侧门'],
-    backgroundImage: '/scenes/symposium.jpg',
+    backgroundImage: '/scenes/symposium.png',
     accessCondition: { timeSlots: ['evening'] },
   },
   gymnasium: {
@@ -279,7 +279,7 @@ export const SCENES: Record<string, Scene> = {
     description: '沙地训练场，橄榄油瓶排列整齐。天窗洒入黎明的光。雅典自由少年和贵族在此锻炼。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['沙地', '柱廊', '更衣室', '水池'],
-    backgroundImage: '/scenes/gymnasium.jpg',
+    backgroundImage: '/scenes/gymnasium.png',
     accessCondition: { timeSlots: ['dawn', 'morning'] },
   },
   study: {
@@ -287,7 +287,7 @@ export const SCENES: Record<string, Scene> = {
     description: '堆满莎草纸卷轴的密室。油灯微弱，黑檀木书桌上散落着蜡版和铜笔。藏有卡利阿斯的私人日记。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['卷轴架', '书桌', '暗格', '蜡版'],
-    backgroundImage: '/scenes/study.jpg',
+    backgroundImage: '/scenes/study.png',
     accessCondition: { timeSlots: ['night'], requiredItem: 'study_key' },
   },
   secret: {
@@ -295,7 +295,7 @@ export const SCENES: Record<string, Scene> = {
     description: '城外一处残破的赫尔墨斯神庙。杂草丛生，月光从塌陷的屋顶洒入。狄奥尼修斯的秘密据点。',
     possibleCharacters: ['dionysios', 'eurydamos'],
     searchableAreas: ['神像', '地下通道', '草丛', '祭坛'],
-    backgroundImage: '/scenes/secret.jpg',
+    backgroundImage: '/scenes/secret.png',
     accessCondition: { timeSlots: ['night'], requiredStat: { npcId: 'dionysios', key: 'trust', min: 30 } },
   },
   courtyard: {
@@ -303,14 +303,14 @@ export const SCENES: Record<string, Scene> = {
     description: '白色大理石柱环绕的中庭。橄榄树投下斑驳阴影，阿波罗雕像立于中央喷泉旁。',
     possibleCharacters: ['kallias', 'dionysios'],
     searchableAreas: ['橄榄树', '雕像', '喷泉', '柱廊'],
-    backgroundImage: '/scenes/courtyard.jpg',
+    backgroundImage: '/scenes/courtyard.png',
   },
   servants: {
     id: 'servants', name: '仆人区', icon: '🏠',
     description: '宅邸后方的仆人居所。简陋的房间，陶罐和粗布，昏暗的灯光。此处能听到最真实的低语。',
     possibleCharacters: ['dionysios'],
     searchableAreas: ['陶罐', '角落', '后门', '储物间'],
-    backgroundImage: '/scenes/servants.jpg',
+    backgroundImage: '/scenes/servants.png',
     accessCondition: { requiredChapter: 2 },
   },
   market: {
@@ -318,7 +318,7 @@ export const SCENES: Record<string, Scene> = {
     description: '阿哥拉广场。陶器摊、鱼贩、哲学家的争辩声混杂。地中海蓝天下人头攒动。',
     possibleCharacters: ['eurydamos', 'philokles'],
     searchableAreas: ['陶器摊', '鱼贩', '柱廊', '角落'],
-    backgroundImage: '/scenes/market.jpg',
+    backgroundImage: '/scenes/market.png',
     accessCondition: { timeSlots: ['morning', 'noon', 'afternoon'] },
   },
 }
