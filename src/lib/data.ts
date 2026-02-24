@@ -29,6 +29,7 @@ export interface Character {
   description: string
   themeColor: string
   avatar: string
+  portraitImage: string
   personality: { core: string; speakStyle: string; catchphrases: string[] }
   stats: StatConfig[]
   unlockCondition: {
@@ -151,7 +152,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'kallias', name: '卡利阿斯', nameEn: 'Kallias',
     title: '贵族 / 你的 erastês', age: 35,
     description: '雅典城邦的显赫贵族，你的庇护者。穿着紫色希马提翁长袍，手戴金环，棕色锐利眼瞳。在城邦政治中颇有手腕，对你既有庇护也有掌控。',
-    themeColor: '#8B6914', avatar: '⚜',
+    themeColor: '#8B6914', avatar: '⚜', portraitImage: '/characters/kallias.png',
     personality: {
       core: '威严、多疑、占有、表面儒雅',
       speakStyle: '措辞优雅但暗含控制。引经据典，常用苏格拉底式反问。',
@@ -179,7 +180,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'philokles', name: '菲洛克勒斯', nameEn: 'Philokles',
     title: '外邦商人 / 威胁者', age: 40,
     description: '从科林斯来的富商，在雅典有广泛的地下势力。身材壮硕，灰蓝色冷眼，全身金饰。以"收藏"少年闻名，臭名昭著却因财力免于追究。',
-    themeColor: '#4a0e0e', avatar: '🐍',
+    themeColor: '#4a0e0e', avatar: '🐍', portraitImage: '/characters/philokles.png',
     personality: {
       core: '残忍、精于算计、以施虐为乐、蔑视弱者',
       speakStyle: '低沉柔和，字字如蛇。用商业术语谈论人，仿佛一切皆可标价。',
@@ -204,7 +205,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'dionysios', name: '狄奥尼修斯', nameEn: 'Dionysios',
     title: '获释自由人 / 盟友', age: 28,
     description: '曾经的奴隶，通过学习陶艺获得自由。瘦削身材，温暖棕色眼瞳，穿简朴褐色束腰衣。在月光废墟中经营秘密的识字班。',
-    themeColor: '#059669', avatar: '🕊',
+    themeColor: '#059669', avatar: '🕊', portraitImage: '/characters/dionysios.png',
     personality: {
       core: '温和、坚韧、有理想、谨慎',
       speakStyle: '语速偏慢，用词朴实但偶尔冒出深刻见解。常用陶艺做比喻。',
@@ -230,7 +231,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'eurydamos', name: '欧律达摩斯', nameEn: 'Eurydamos',
     title: '获释自由人 / 证人', age: 32,
     description: '满面伤疤、佝偻着身体的前奴隶。曾是菲洛克勒斯的"收藏品"之一，奇迹般存活。在集市角落卖廉价陶器为生。',
-    themeColor: '#6b7280', avatar: '💔',
+    themeColor: '#6b7280', avatar: '💔', portraitImage: '/characters/eurydamos.png',
     personality: {
       core: '恐惧、沉默、偶尔爆发的愤怒与正义感',
       speakStyle: '断断续续，经常中途停顿。一旦被触发创伤会陷入恍惚。但提到帮助别人时眼中会有光。',

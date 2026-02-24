@@ -70,10 +70,7 @@ function PortraitCard() {
   return (
     <div className="qt-card qt-portrait-card">
       {char ? (
-        <div className="qt-placeholder" style={{ height: '100%', justifyContent: 'center' }}>
-          <span style={{ fontSize: 80 }}>{char.avatar}</span>
-          <span style={{ fontSize: 14, color: char.themeColor, fontWeight: 600, marginTop: 8 }}>{char.name}</span>
-        </div>
+        <img src={char.portraitImage} alt={char.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
       ) : (
         <div className="qt-placeholder" style={{ paddingBottom: 40 }}>
           <span className="qt-placeholder-icon">🏛️</span>
@@ -166,7 +163,11 @@ function CharacterList() {
               onClick={() => !isLocked && selectCharacter(currentCharacter === charId ? null : charId)}
               disabled={isLocked}
             >
-              <span>{char.avatar}</span>
+              {isLocked ? (
+                <span style={{ fontSize: 20 }}>🔒</span>
+              ) : (
+                <img src={char.portraitImage} alt={char.name} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+              )}
               <span>{isLocked ? '???' : char.name}</span>
             </button>
           )

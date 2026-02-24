@@ -43,7 +43,12 @@ function MobileHeader({ onCharClick, onMenuClick }: { onCharClick: () => void; o
       </div>
       <div className="mobile-header-right">
         <button className="mobile-header-npc" onClick={onCharClick}>
-          {char ? <span style={{ color: char.themeColor }}>{char.avatar} {char.name}</span> : <span style={{ color: 'var(--text-muted)' }}>选择角色</span>}
+          {char ? (
+            <span style={{ color: char.themeColor, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <img src={char.portraitImage} alt={char.name} style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+              {char.name}
+            </span>
+          ) : <span style={{ color: 'var(--text-muted)' }}>选择角色</span>}
           <span className="mobile-header-arrow">▼</span>
         </button>
         <button className="mobile-header-menu" onClick={onMenuClick}>☰</button>
@@ -221,7 +226,11 @@ function CharacterSheet({ open, onClose }: { open: boolean; onClose: () => void 
                 const stats = npcStats[char.id]
                 return (
                   <button key={char.id} className={`mobile-char-card ${isSelected ? 'selected' : ''} ${isLocked ? 'locked' : ''}`} style={{ borderColor: isSelected ? char.themeColor : 'transparent' }} onClick={() => handleSelect(char.id)} disabled={isLocked}>
-                    <span style={{ fontSize: 28 }}>{isLocked ? '🔒' : char.avatar}</span>
+                    {isLocked ? (
+                      <span style={{ fontSize: 28 }}>🔒</span>
+                    ) : (
+                      <img src={char.portraitImage} alt={char.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+                    )}
                     <span className="mobile-char-name" style={{ color: isLocked ? 'var(--text-muted)' : char.themeColor }}>{isLocked ? '???' : char.name}</span>
                     {!isLocked && stats && (
                       <div className="mobile-char-stats">
