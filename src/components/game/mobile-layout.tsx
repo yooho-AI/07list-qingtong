@@ -378,6 +378,7 @@ function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
             <div className="mobile-menu-title">游戏菜单</div>
             <button className="mobile-menu-btn" onClick={() => { saveGame(); onClose() }}>💾 保存游戏</button>
             <button className="mobile-menu-btn" onClick={() => resetGame()}>🏠 返回标题</button>
+            <button className="mobile-menu-btn" onClick={() => window.open('https://yooho.ai/', '_blank')}>🌐 返回主页</button>
             <button className="mobile-menu-btn" onClick={onClose}>▶️ 继续游戏</button>
           </motion.div>
         </>

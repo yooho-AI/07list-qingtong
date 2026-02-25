@@ -145,6 +145,7 @@ function GameScreen() {
               <div className="qt-modal-btns">
                 <button className="qt-modal-btn" onClick={() => { saveGame(); setShowMenu(false) }}>💾 保存游戏</button>
                 <button className="qt-modal-btn" onClick={() => resetGame()}>🏠 返回标题</button>
+                <button className="qt-modal-btn" onClick={() => window.open('https://yooho.ai/', '_blank')}>🌐 返回主页</button>
                 <button className="qt-modal-btn" onClick={() => setShowMenu(false)}>▶️ 继续游戏</button>
               </div>
             </motion.div>
