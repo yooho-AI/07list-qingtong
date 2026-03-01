@@ -5,98 +5,100 @@
 
 公元前432年雅典，12岁少年阿莱克西斯被出售为贵族男宠 — 四位关键人物，双层时间系统，九种结局。
 
-## 目录结构
+## 架构
 
 ```
 07list-qingtong/
-├── index.html           - SPA 入口 HTML（Umami 统计 + 🏛️ favicon）
-├── package.json         - 依赖声明（纯独立 SPA）
-├── vite.config.ts       - Vite 配置（react + tailwindcss + @ 别名）
-├── wrangler.toml        - Cloudflare Worker 配置（qingtong-api）
-├── worker/              - API 代理 (1 文件)
-│   └── index.js         - Cloudflare Worker，转发到 shubiaobiao API
-├── public/              - 静态资源
-│   ├── audio/           - BGM 音频
-│   ├── characters/      - 角色立绘 PNG
-│   └── scenes/          - 场景背景 PNG
-└── src/                 - 源码 (3 子目录)
-    ├── main.tsx         - React 挂载入口
-    ├── App.tsx          - 根组件：StartScreen ↔ GameScreen + 结局系统
-    ├── styles/          - 样式 (1 文件: globals.css)
-    ├── lib/             - 核心逻辑 (8 文件: data/store/stream/parser/bgm/hooks/highlight/analytics)
-    └── components/game/ - 游戏 UI (6 文件: dialogue/character/side/mobile/highlight)
+├── worker/index.js              - ☆ CF Worker API 代理（备用，未部署）
+├── public/
+│   ├── audio/bgm.mp3            - 背景音乐
+│   ├── characters/              - 4 角色立绘 9:16 竖版 (1152x2048)
+│   └── scenes/                  - 8 场景背景 9:16 竖版 (1152x2048)
+├── src/
+│   ├── main.tsx                 - ☆ React 入口
+│   ├── vite-env.d.ts            - Vite 类型声明
+│   ├── App.tsx                  - 根组件: 开场屏 + GameScreen(AppShell) + EndingModal + MenuOverlay
+│   ├── lib/
+│   │   ├── script.md            - ★ 剧本直通：五模块原文（零转换注入 prompt）
+│   │   ├── data.ts              - ★ UI 薄层：类型(含富消息扩展) + 4角色 + 8场景 + 9道具 + 5章节 + 10事件 + 9结局
+│   │   ├── store.ts             - ★ 状态中枢：Zustand + 富消息插入(场景/换月) + 抽屉状态 + StoryRecord + 双轨解析 + 链式反应
+│   │   ├── parser.ts            - AI 回复解析（4角色着色 + 数值着色 + extractChoices）
+│   │   ├── analytics.ts         - Umami 埋点（qt_ 前缀）
+│   │   ├── stream.ts            - ☆ SSE 流式通信
+│   │   ├── bgm.ts               - ☆ 背景音乐
+│   │   └── hooks.ts             - ☆ useMediaQuery / useIsMobile
+│   ├── styles/
+│   │   ├── globals.css          - 全局基础样式（qt- 前缀）
+│   │   ├── opening.css          - 开场样式：古希腊柱纹 + 雾气 + 金色标题
+│   │   └── rich-cards.css       - 富UI组件：场景卡 + 章节卡 + NPC气泡 + Dashboard + RecordSheet + SVG关系图
+│   └── components/game/
+│       ├── app-shell.tsx        - 桌面居中壳 + Header + Tab路由 + 5键TabBar + 三向手势 + DashboardDrawer + RecordSheet + Toast
+│       ├── dashboard-drawer.tsx - 调查笔记(左抽屉)：扉页+人物轮播+场景缩略图+目标+道具格+属性+音乐。Reorder拖拽排序
+│       ├── tab-dialogue.tsx     - 对话Tab：富消息路由(SceneCard/ChapterCard/NPC头像气泡) + 可折叠选项面板 + 快捷操作 + 背包
+│       ├── tab-scene.tsx        - 场景Tab：9:16大图 + 角色标签行 + 地点列表
+│       └── tab-character.tsx    - 人物Tab：SVG关系图 + 玩家属性 + 角色列表 + 全屏档案
+├── index.html
+├── package.json
+├── vite.config.ts               - ☆
+├── tsconfig*.json               - ☆
+└── wrangler.toml                - ☆
 ```
 
-## 数据流
+★ = 种子文件 ☆ = 零修改模板
 
-```
-用户输入 → store.sendMessage()
-  → stream.ts SSE 流式请求 → api.yooho.ai
-  → onChunk 实时更新 streamingContent
-  → 完成后 parseStoryParagraph() 解析故事段落
-  → 解析数值变化（【角色名 属性名±N】）→ updateNpcStat
-  → 解析道具获得（【获得道具：道具名】）→ addItem
-  → 解析事件触发（【事件：事件名】）→ triggerEvent
-  → advanceMonth() → 检查章节/事件/解锁/结局
-  → 消息 > 15 条时自动压缩历史上下文
-```
+## 核心设计
 
-## 视觉系统
+- **古希腊历史生存**：4 NPC 角色，8 场景，9 道具，5 章节，9 结局
+- **双轨数值**：5 玩家属性（健康/洞察/自主/希望/技艺）+ NPC 异构属性（好感/信任/占有欲/威胁/同情）
+- **暗青铜主题**：深底(#0f0d0a)+青铜(#CD7F32)，qt- CSS 前缀，STKaiti 字体
+- **6 时段制**：每月 6 时段（黎明/上午/正午/午后/傍晚/深夜），共 60 月
+- **剧本直通**：script.md 存五模块原文，?raw import 注入 prompt
+- **9 结局**：BE×3 + TE×2 + HE×2 + NE×2，优先级 TE→HE→BE→NE
 
-```
-风格:       Notion 卡片布局 + 古希腊青铜暗色主题
-外壳背景:   #0f0d0a / 卡片: #241e18
-文字:       主 #e8dcc8 / 次 #a09078 / 淡 #6b5d4f
-主色:       #CD7F32 (青铜色)
-次色:       #8B6914 (暗橄榄金) / 强调色: #2F4F4F (暗石板)
-渐变按钮:   #CD7F32 → #8B6914
-CSS 前缀:   qt-
-角色色:     卡利阿斯 #8B6914, 菲洛克勒斯 #4a0e0e, 狄奥尼修斯 #059669, 欧律马科斯 #6b7280
-```
+## 富UI组件系统
 
-## 核心系统
+| 组件 | 位置 | 触发 | 视觉风格 |
+|------|------|------|----------|
+| StartScreen | App.tsx | 开场 | 古希腊柱纹+雾气+金色标题+角色立绘预览 |
+| DashboardDrawer | dashboard-drawer | Header📓+右滑手势 | 毛玻璃+青铜渐变：扉页+人物轮播+场景缩略图+目标+道具+属性+音乐+Reorder拖拽 |
+| RecordSheet | app-shell | Header📜+左滑手势 | 右侧滑入事件记录：时间线倒序+青铜圆点 |
+| SceneTransitionCard | tab-dialogue | selectScene | 场景背景+Ken Burns(8s)+渐变遮罩+角标 |
+| ChapterCard | tab-dialogue | 换章 | 石碑风格+月份+章节名+青铜配色 |
+| NpcBubble | tab-dialogue | assistant 消息 | 28px圆形立绘+彩色左边框 |
+| RelationGraph | tab-character | 始终可见 | SVG环形布局，中心"我"+4NPC立绘节点+连线+关系标签 |
+| CharacterDossier | tab-character | 点击角色 | 全屏右滑入+立绘+属性条+好感阶段+秘密暗示 |
+| EndingModal | App.tsx | checkEnding | ENDING_TYPE_MAP驱动+继续探索/返回标题 |
+| Toast | app-shell | saveGame | TabBar上方弹出 |
 
-### 双层时间系统
-- **月份** (1-60)：5年，每次对话推进1月
-- **时段** (6种)：黎明/清晨/正午/午后/傍晚/深夜，影响场景开放
+## 三向手势导航
 
-### NPC 异构数值系统
-| NPC | 属性 | 初始值 |
-|-----|------|--------|
-| 卡利阿斯 | 好感度/信任度/占有欲 | 50/30/60 |
-| 菲洛克勒斯 | 威胁度 | 0 |
-| 狄奥尼修斯 | 信任度 | 0 |
-| 欧律马科斯 | 同情度 | 0 |
+- **右滑**（任意主Tab内容区）→ 左侧调查笔记
+- **左滑**（任意主Tab内容区）→ 右侧事件记录
+- Header 按钮（📓/📜）同等触发
+- 笔记内组件支持拖拽排序（Reorder + localStorage `qt-dash-order` 持久化）
 
-### 玩家隐藏数值
-| 数值 | 初始 | 可见 |
-|------|------|------|
-| 健康值 | 100 | ✓ |
-| 洞察力 | 0 | ✗ |
-| 自主性 | 50 | ✗ |
-| 希望值 | 50 | ✗ |
-| 技艺 | 0 | ✗ |
+## Store 状态扩展
 
-### 五章结构
-| 章 | 名称 | 月份 | 年龄 |
-|----|------|------|------|
-| 1 | 初入宅邸 | 1-6 | 12岁 |
-| 2 | 酒会考验 | 7-18 | 13岁 |
-| 3 | 预警危机 | 19-36 | 14-15岁 |
-| 4 | 申诉之路 | 37-54 | 16岁 |
-| 5 | 终点站 | 55-60 | 17岁 |
+- `activeTab: 'dialogue' | 'scene' | 'character'`
+- `showDashboard / showRecords: boolean` — 左右抽屉开关
+- `storyRecords: StoryRecord[]` — 事件记录（sendMessage 和 advanceMonth 自动追加）
+- `choices: string[]` — AI 动态选项
+- `selectCharacter` 末尾自动跳转 dialogue Tab
 
-### 九种结局
-| ID | 名称 | 类型 | 优先级 |
-|----|------|------|--------|
-| TE-1 | 真相揭露者 | 真结局 | 1 |
-| TE-2 | 永恒的循环 | 真结局 | 2 |
-| HE-1 | 自由公民 | 好结局 | 3 |
-| HE-2 | 破茧之蝶 | 好结局 | 4 |
-| BE-1 | 深渊 | 坏结局 | 5 |
-| BE-2 | 沉溺者 | 坏结局 | 6 |
-| BE-3 | 遗忘 | 坏结局 | 7 |
-| NE-1 | 陶工学徒 | 中立 | 8 |
-| NE-2 | 制度性喘息 | 中立 | 9 |
+## 富消息机制
+
+Message 类型扩展 `type` 字段路由渲染：
+- `scene-transition` → SceneTransitionCard（selectScene 触发）
+- `chapter-change` → ChapterCard（advanceMonth 换章时触发）
+- NPC 消息带 `character` 字段 → 28px 圆形立绘头像
+
+## Analytics 集成
+
+- `trackGameStart` / `trackPlayerCreate` → App.tsx 开场
+- `trackGameContinue` → App.tsx 继续游戏
+- `trackTimeAdvance` / `trackChapterEnter` → store.ts advanceMonth
+- `trackEndingReached` → store.ts checkEnding
+- `trackMentalCrisis` → store.ts hope≤20
+- `trackSceneUnlock` → store.ts selectScene/advanceMonth
 
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md

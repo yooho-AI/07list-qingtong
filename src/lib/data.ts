@@ -1,15 +1,46 @@
 /**
  * [INPUT]: 无外部依赖
- * [OUTPUT]: 对外提供游戏类型定义 + 数据常量 + 工具函数
- * [POS]: lib 的游戏数据层，4NPC/8场景/9道具/10事件/5章节/9结局/配置/故事信息
+ * [OUTPUT]: 对外提供全部类型定义 + 角色/场景/道具/事件/章节/结局常量 + 工具函数
+ * [POS]: UI 薄层，叙事内容在 script.md
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-// ============================================================
-// 类型定义
-// ============================================================
+// ── 时间系统 ─────────────────────────────────────────
 
-/* ------ NPC 异构数值 ------ */
+export type TimeSlot = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night'
+
+export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
+  dawn: '黎明', morning: '上午', noon: '正午',
+  afternoon: '午后', evening: '傍晚', night: '深夜',
+}
+
+export const TIME_SLOTS: TimeSlot[] = ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night']
+
+export const MAX_MONTHS = 60
+
+// ── 属性元数据 ───────────────────────────────────────
+
+export interface StatMeta {
+  label: string
+  key: string
+  min: number
+  max: number
+  initial: number
+  color: string
+  icon: string
+  category: 'relation' | 'status' | 'skill'
+  hidden?: boolean
+}
+
+export const PLAYER_STATS: StatMeta[] = [
+  { label: '健康值', key: 'health', min: 0, max: 100, initial: 100, color: '#22c55e', icon: '❤️', category: 'status' },
+  { label: '洞察力', key: 'insight', min: 0, max: 100, initial: 0, color: '#3b82f6', icon: '👁', category: 'skill', hidden: true },
+  { label: '自主性', key: 'autonomy', min: 0, max: 100, initial: 50, color: '#a855f7', icon: '🗽', category: 'status', hidden: true },
+  { label: '希望值', key: 'hope', min: 0, max: 100, initial: 50, color: '#f59e0b', icon: '🌟', category: 'status', hidden: true },
+  { label: '技艺', key: 'artSkill', min: 0, max: 100, initial: 0, color: '#06b6d4', icon: '🏺', category: 'skill', hidden: true },
+]
+
+// ── 角色 ─────────────────────────────────────────────
 
 export interface StatConfig {
   key: string
@@ -17,7 +48,6 @@ export interface StatConfig {
   alias: string
   color: string
   initial: number
-  hidden?: boolean
 }
 
 export interface Character {
@@ -28,8 +58,7 @@ export interface Character {
   age: number
   description: string
   themeColor: string
-  avatar: string
-  portraitImage: string
+  portrait: string
   personality: { core: string; speakStyle: string; catchphrases: string[] }
   stats: StatConfig[]
   unlockCondition: {
@@ -42,16 +71,7 @@ export interface Character {
   favorLevels: { range: [number, number]; label: string; behavior: string }[]
 }
 
-/* ------ 时间 ------ */
-
-export type TimeSlot = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night'
-
-export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
-  dawn: '黎明', morning: '上午', noon: '正午',
-  afternoon: '午后', evening: '傍晚', night: '深夜',
-}
-
-/* ------ 场景 ------ */
+// ── 场景 ─────────────────────────────────────────────
 
 export interface Scene {
   id: string
@@ -60,7 +80,7 @@ export interface Scene {
   description: string
   possibleCharacters: string[]
   searchableAreas: string[]
-  backgroundImage: string
+  background: string
   accessCondition?: {
     timeSlots?: TimeSlot[]
     requiredItem?: string
@@ -70,7 +90,7 @@ export interface Scene {
   }
 }
 
-/* ------ 道具 ------ */
+// ── 道具 ─────────────────────────────────────────────
 
 export interface GameItem {
   id: string
@@ -80,7 +100,7 @@ export interface GameItem {
   type: 'permanent' | 'consumable' | 'key' | 'evidence'
 }
 
-/* ------ 事件 ------ */
+// ── 事件 ─────────────────────────────────────────────
 
 export interface GameEvent {
   id: string
@@ -98,7 +118,7 @@ export interface GameEvent {
   chapter: number
 }
 
-/* ------ 章节 ------ */
+// ── 章节 ─────────────────────────────────────────────
 
 export interface Chapter {
   id: number
@@ -111,7 +131,7 @@ export interface Chapter {
   sideGoal?: string
 }
 
-/* ------ 结局 ------ */
+// ── 结局 ─────────────────────────────────────────────
 
 export interface Ending {
   id: string
@@ -129,18 +149,34 @@ export interface Ending {
   }
 }
 
-/* ------ 消息 ------ */
+export const ENDING_TYPE_MAP: Record<string, { label: string; gradient: string }> = {
+  TE: { label: '🌟 真结局', gradient: 'linear-gradient(135deg, #1a0a2e, #3d1060)' },
+  HE: { label: '🕊️ 好结局', gradient: 'linear-gradient(135deg, #0a1a1a, #103d30)' },
+  BE: { label: '🔥 坏结局', gradient: 'linear-gradient(135deg, #1a0a0a, #3d1010)' },
+  NE: { label: '⚖️ 中性结局', gradient: 'linear-gradient(135deg, #0a0a1a, #101030)' },
+}
 
-export interface GameMessage {
+// ── 消息类型 ─────────────────────────────────────────
+
+export interface Message {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  characterId?: string
-  characterName?: string
-  characterColor?: string
-  isPlayerAction?: boolean
-  isNarrative?: boolean
   timestamp: number
+  character?: string
+  type?: 'scene-transition' | 'chapter-change'
+  sceneId?: string
+  monthInfo?: { month: number; timeSlot: string; chapter: string }
+}
+
+// ── 事件记录 ─────────────────────────────────────────
+
+export interface StoryRecord {
+  id: string
+  month: number
+  timeSlot: string
+  title: string
+  content: string
 }
 
 // ============================================================
@@ -152,7 +188,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'kallias', name: '卡利阿斯', nameEn: 'Kallias',
     title: '贵族 / 你的 erastês', age: 35,
     description: '雅典城邦的显赫贵族，你的庇护者。穿着紫色希马提翁长袍，手戴金环，棕色锐利眼瞳。在城邦政治中颇有手腕，对你既有庇护也有掌控。',
-    themeColor: '#8B6914', avatar: '⚜', portraitImage: '/characters/kallias.png',
+    themeColor: '#8B6914', portrait: '/characters/kallias.png',
     personality: {
       core: '威严、多疑、占有、表面儒雅',
       speakStyle: '措辞优雅但暗含控制。引经据典，常用苏格拉底式反问。',
@@ -180,7 +216,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'philokles', name: '菲洛克勒斯', nameEn: 'Philokles',
     title: '外邦商人 / 威胁者', age: 40,
     description: '从科林斯来的富商，在雅典有广泛的地下势力。身材壮硕，灰蓝色冷眼，全身金饰。以"收藏"少年闻名，臭名昭著却因财力免于追究。',
-    themeColor: '#4a0e0e', avatar: '🐍', portraitImage: '/characters/philokles.png',
+    themeColor: '#4a0e0e', portrait: '/characters/philokles.png',
     personality: {
       core: '残忍、精于算计、以施虐为乐、蔑视弱者',
       speakStyle: '低沉柔和，字字如蛇。用商业术语谈论人，仿佛一切皆可标价。',
@@ -205,7 +241,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'dionysios', name: '狄奥尼修斯', nameEn: 'Dionysios',
     title: '获释自由人 / 盟友', age: 28,
     description: '曾经的奴隶，通过学习陶艺获得自由。瘦削身材，温暖棕色眼瞳，穿简朴褐色束腰衣。在月光废墟中经营秘密的识字班。',
-    themeColor: '#059669', avatar: '🕊', portraitImage: '/characters/dionysios.png',
+    themeColor: '#059669', portrait: '/characters/dionysios.png',
     personality: {
       core: '温和、坚韧、有理想、谨慎',
       speakStyle: '语速偏慢，用词朴实但偶尔冒出深刻见解。常用陶艺做比喻。',
@@ -231,7 +267,7 @@ export const CHARACTERS: Record<string, Character> = {
     id: 'eurydamos', name: '欧律达摩斯', nameEn: 'Eurydamos',
     title: '获释自由人 / 证人', age: 32,
     description: '满面伤疤、佝偻着身体的前奴隶。曾是菲洛克勒斯的"收藏品"之一，奇迹般存活。在集市角落卖廉价陶器为生。',
-    themeColor: '#6b7280', avatar: '💔', portraitImage: '/characters/eurydamos.png',
+    themeColor: '#6b7280', portrait: '/characters/eurydamos.png',
     personality: {
       core: '恐惧、沉默、偶尔爆发的愤怒与正义感',
       speakStyle: '断断续续，经常中途停顿。一旦被触发创伤会陷入恍惚。但提到帮助别人时眼中会有光。',
@@ -265,14 +301,14 @@ export const SCENES: Record<string, Scene> = {
     description: '卡利阿斯宅邸中你的居室。克利奈床榻、青铜镜、蓝色帷幕，爱奥尼柱映着晨光。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['床榻', '青铜镜', '木箱', '窗台'],
-    backgroundImage: '/scenes/bedroom.png',
+    background: '/scenes/bedroom.png',
   },
   symposium: {
     id: 'symposium', name: '酒宴厅', icon: '🍷',
     description: '半环形卧榻排列的宴饮大厅。油灯摇曳，红墙绘满神话故事，酒杯碰撞声不绝。',
     possibleCharacters: ['kallias', 'philokles'],
     searchableAreas: ['卧榻', '酒案', '壁画', '侧门'],
-    backgroundImage: '/scenes/symposium.png',
+    background: '/scenes/symposium.png',
     accessCondition: { timeSlots: ['evening'] },
   },
   gymnasium: {
@@ -280,7 +316,7 @@ export const SCENES: Record<string, Scene> = {
     description: '沙地训练场，橄榄油瓶排列整齐。天窗洒入黎明的光。雅典自由少年和贵族在此锻炼。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['沙地', '柱廊', '更衣室', '水池'],
-    backgroundImage: '/scenes/gymnasium.png',
+    background: '/scenes/gymnasium.png',
     accessCondition: { timeSlots: ['dawn', 'morning'] },
   },
   study: {
@@ -288,7 +324,7 @@ export const SCENES: Record<string, Scene> = {
     description: '堆满莎草纸卷轴的密室。油灯微弱，黑檀木书桌上散落着蜡版和铜笔。藏有卡利阿斯的私人日记。',
     possibleCharacters: ['kallias'],
     searchableAreas: ['卷轴架', '书桌', '暗格', '蜡版'],
-    backgroundImage: '/scenes/study.png',
+    background: '/scenes/study.png',
     accessCondition: { timeSlots: ['night'], requiredItem: 'study_key' },
   },
   secret: {
@@ -296,7 +332,7 @@ export const SCENES: Record<string, Scene> = {
     description: '城外一处残破的赫尔墨斯神庙。杂草丛生，月光从塌陷的屋顶洒入。狄奥尼修斯的秘密据点。',
     possibleCharacters: ['dionysios', 'eurydamos'],
     searchableAreas: ['神像', '地下通道', '草丛', '祭坛'],
-    backgroundImage: '/scenes/secret.png',
+    background: '/scenes/secret.png',
     accessCondition: { timeSlots: ['night'], requiredStat: { npcId: 'dionysios', key: 'trust', min: 30 } },
   },
   courtyard: {
@@ -304,14 +340,14 @@ export const SCENES: Record<string, Scene> = {
     description: '白色大理石柱环绕的中庭。橄榄树投下斑驳阴影，阿波罗雕像立于中央喷泉旁。',
     possibleCharacters: ['kallias', 'dionysios'],
     searchableAreas: ['橄榄树', '雕像', '喷泉', '柱廊'],
-    backgroundImage: '/scenes/courtyard.png',
+    background: '/scenes/courtyard.png',
   },
   servants: {
     id: 'servants', name: '仆人区', icon: '🏠',
     description: '宅邸后方的仆人居所。简陋的房间，陶罐和粗布，昏暗的灯光。此处能听到最真实的低语。',
     possibleCharacters: ['dionysios'],
     searchableAreas: ['陶罐', '角落', '后门', '储物间'],
-    backgroundImage: '/scenes/servants.png',
+    background: '/scenes/servants.png',
     accessCondition: { requiredChapter: 2 },
   },
   market: {
@@ -319,7 +355,7 @@ export const SCENES: Record<string, Scene> = {
     description: '阿哥拉广场。陶器摊、鱼贩、哲学家的争辩声混杂。地中海蓝天下人头攒动。',
     possibleCharacters: ['eurydamos', 'philokles'],
     searchableAreas: ['陶器摊', '鱼贩', '柱廊', '角落'],
-    backgroundImage: '/scenes/market.png',
+    background: '/scenes/market.png',
     accessCondition: { timeSlots: ['morning', 'noon', 'afternoon'] },
   },
 }
@@ -479,7 +515,6 @@ export const CHAPTERS: Chapter[] = [
 // ============================================================
 
 export const ENDINGS: Ending[] = [
-  /* --- TE: 真结局 --- */
   {
     id: 'TE-1', name: '真相揭露者', type: 'TE', priority: 1,
     description: '你在公民大会上公开指控菲洛克勒斯的罪行，欧律达摩斯颤抖着站上证人席。你揭露了卡利阿斯的交易记录，引发城邦震动。',
@@ -501,8 +536,6 @@ export const ENDINGS: Ending[] = [
       eventsNot: ['appeal_hearing'],
     },
   },
-
-  /* --- HE: 好结局 --- */
   {
     id: 'HE-1', name: '自由公民', type: 'HE', priority: 3,
     description: '凭借法律文献和狄奥尼修斯的帮助，你通过正式途径获得了自由公民身份。卡利阿斯最终在推荐信上盖了印章。',
@@ -525,8 +558,6 @@ export const ENDINGS: Ending[] = [
       eventsNot: ['kallias_dark'],
     },
   },
-
-  /* --- BE: 坏结局 --- */
   {
     id: 'BE-1', name: '深渊', type: 'BE', priority: 5,
     description: '菲洛克勒斯最终得逞了。卡利阿斯在一次赌博中将你作为"赌注"输给了他。你被带往科林斯。',
@@ -563,8 +594,6 @@ export const ENDINGS: Ending[] = [
       eventsNot: ['eurydamos_testimony'],
     },
   },
-
-  /* --- NE: 中性结局 --- */
   {
     id: 'NE-1', name: '陶工学徒', type: 'NE', priority: 8,
     description: '17岁时，卡利阿斯按惯例结束了你们的关系。他给了你一小笔钱和一身衣服。你在集市上找到了一份陶工学徒的工作。',
@@ -587,18 +616,7 @@ export const ENDINGS: Ending[] = [
 ]
 
 // ============================================================
-// 游戏配置
-// ============================================================
-
-export const GAME_CONFIG = {
-  MAX_MONTHS: 60,
-  TIME_SLOTS: ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night'] as TimeSlot[],
-  PLAYER_NAME: '阿莱克西斯',
-  PLAYER_NAME_EN: 'Alexis',
-}
-
-// ============================================================
-// 故事简介
+// 故事信息
 // ============================================================
 
 export const STORY_INFO = {
@@ -621,7 +639,6 @@ export const STORY_INFO = {
 // 工具函数
 // ============================================================
 
-/* 获取 NPC 某个属性的等级描述 */
 export function getStatLevel(char: Character, key: string, value: number): { label: string; behavior: string } | null {
   if (key === char.stats[0]?.key && char.favorLevels.length > 0) {
     const level = char.favorLevels.find((l) => value >= l.range[0] && value <= l.range[1])
@@ -630,16 +647,14 @@ export function getStatLevel(char: Character, key: string, value: number): { lab
   return null
 }
 
-/* 获取当前章节 */
 export function getChapterByMonth(month: number): Chapter {
   return CHAPTERS.find((c) => month >= c.monthRange[0] && month <= c.monthRange[1]) || CHAPTERS[CHAPTERS.length - 1]
 }
 
-/* 计算游戏时间显示 */
 export function getTimeDisplay(month: number): { year: number; monthInYear: number; age: number; remaining: number } {
   const year = Math.ceil(month / 12)
   const monthInYear = ((month - 1) % 12) + 1
   const age = 12 + Math.floor((month - 1) / 12)
-  const remaining = GAME_CONFIG.MAX_MONTHS - month
+  const remaining = MAX_MONTHS - month
   return { year, monthInYear, age, remaining }
 }

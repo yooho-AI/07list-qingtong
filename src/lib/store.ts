@@ -1,71 +1,135 @@
 /**
- * [INPUT]: 依赖 zustand, immer, @/lib/stream, @/lib/data, @/lib/analytics
- * [OUTPUT]: 对外提供 useGameStore（Zustand 状态中枢）
- * [POS]: lib 的状态管理层，时间系统 + 章节推进 + 事件 + 道具 + 结局判定 + SSE + 存档
+ * [INPUT]: 依赖 script.md(?raw), stream.ts, data.ts, parser.ts, analytics.ts
+ * [OUTPUT]: 对外提供 useGameStore + re-export data.ts + parser.ts
+ * [POS]: 状态中枢：Zustand+Immer，剧本直通+富消息+双轨解析+链式反应+存档
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import { streamChat, chat } from '@/lib/stream'
-import { trackGameStart, trackGameContinue } from '@/lib/analytics'
+import GAME_SCRIPT from './script.md?raw'
+import { streamChat } from './stream'
 import {
-  type GameMessage, type TimeSlot, type Ending,
-  CHARACTERS, SCENES, ITEMS, EVENTS, CHAPTERS, ENDINGS,
-  GAME_CONFIG, TIME_SLOT_LABELS,
-  getChapterByMonth, getTimeDisplay, getStatLevel,
-} from '@/lib/data'
+  type Message,
+  type StoryRecord,
+  type TimeSlot,
+  type Ending,
+  CHARACTERS,
+  SCENES,
+  ITEMS,
+  EVENTS,
+  CHAPTERS,
+  ENDINGS,
+  MAX_MONTHS,
+  TIME_SLOT_LABELS,
+  TIME_SLOTS,
+  STORY_INFO,
+  getChapterByMonth,
+  getTimeDisplay,
+  getStatLevel,
+} from './data'
+import { parseStoryParagraph, extractChoices } from './parser'
+import {
+  trackGameStart,
+  trackGameContinue,
+  trackTimeAdvance,
+  trackChapterEnter,
+  trackEndingReached,
+  trackSceneUnlock,
+  trackMentalCrisis,
+} from './analytics'
 
-// ============================================================
-// Store 类型
-// ============================================================
+// ── Re-export ────────────────────────────────────────
+export {
+  type Character,
+  type Message,
+  type StoryRecord,
+  type TimeSlot,
+  type Ending,
+  CHARACTERS,
+  SCENES,
+  ITEMS,
+  EVENTS,
+  CHAPTERS,
+  ENDINGS,
+  PLAYER_STATS,
+  MAX_MONTHS,
+  TIME_SLOT_LABELS,
+  TIME_SLOTS,
+  STORY_INFO,
+  ENDING_TYPE_MAP,
+  getChapterByMonth,
+  getTimeDisplay,
+  getStatLevel,
+} from './data'
+export { parseStoryParagraph, extractChoices } from './parser'
+
+// ── Helpers ──────────────────────────────────────────
+
+let messageCounter = 0
+const makeId = () => `msg-${Date.now()}-${++messageCounter}`
+const SAVE_KEY = 'qingtong-save-v1'
+const HISTORY_COMPRESS_THRESHOLD = 15
+
+function clamp(val: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, val))
+}
+
+function buildInitialNpcStats(): Record<string, Record<string, number>> {
+  const result: Record<string, Record<string, number>> = {}
+  for (const [id, char] of Object.entries(CHARACTERS)) {
+    result[id] = {}
+    for (const stat of char.stats) {
+      result[id][stat.key] = stat.initial
+    }
+  }
+  return result
+}
+
+// ── State / Actions ──────────────────────────────────
+
+interface PlayerStats {
+  health: number
+  insight: number
+  autonomy: number
+  hope: number
+  artSkill: number
+}
 
 interface GameState {
   gameStarted: boolean
 
-  /* 时间系统 */
   currentMonth: number
   currentTimeSlot: TimeSlot
   currentChapter: number
 
-  /* 场景 & NPC */
   currentScene: string
   currentCharacter: string | null
   unlockedCharacters: string[]
   unlockedScenes: string[]
 
-  /* NPC 异构数值 */
   npcStats: Record<string, Record<string, number>>
+  playerStats: PlayerStats
 
-  /* 玩家隐藏数值 */
-  playerStats: {
-    health: number
-    insight: number
-    autonomy: number
-    hope: number
-    artSkill: number
-  }
-
-  /* 道具 */
   inventory: string[]
-
-  /* 事件 */
   triggeredEvents: string[]
   activeForceEvent: string | null
 
-  /* 对话 */
-  messages: GameMessage[]
+  messages: Message[]
   streamingContent: string
   isTyping: boolean
-  historySummary: string | null
+  historySummary: string
 
-  /* 结局 */
   endingId: string | null
   endingData: Ending | null
   showEndingModal: boolean
 
-  /* 选择记录 */
-  choices: Record<string, string>
+  choices: string[]
+
+  activeTab: 'dialogue' | 'scene' | 'character'
+  showDashboard: boolean
+  showRecords: boolean
+  storyRecords: StoryRecord[]
 }
 
 interface GameActions {
@@ -89,48 +153,184 @@ interface GameActions {
   isEventTriggered: (eventId: string) => boolean
   checkConditionalEvents: () => void
 
-  recordChoice: (key: string, value: string) => void
-
   sendMessage: (text: string) => Promise<void>
   addSystemMessage: (content: string) => void
 
   checkEnding: () => void
 
+  setActiveTab: (tab: 'dialogue' | 'scene' | 'character') => void
+  toggleDashboard: () => void
+  toggleRecords: () => void
+
   saveGame: () => void
-  loadGame: () => void
+  loadGame: () => boolean
   hasSave: () => boolean
+  clearSave: () => void
 }
 
-// ============================================================
-// 辅助
-// ============================================================
+type GameStore = GameState & GameActions
 
-let counter = 0
-const makeId = () => `msg-${Date.now()}-${++counter}`
-const SAVE_KEY = 'qingtong-save-v1'
+// ── Dual-track parseStatChanges ──────────────────────
 
-function buildInitialNpcStats(): Record<string, Record<string, number>> {
-  const result: Record<string, Record<string, number>> = {}
+interface StatChangeResult {
+  npcChanges: Array<{ npcId: string; key: string; delta: number }>
+  playerChanges: Array<{ key: string; delta: number }>
+}
+
+function parseStatChanges(content: string): StatChangeResult {
+  const npcChanges: StatChangeResult['npcChanges'] = []
+  const playerChanges: StatChangeResult['playerChanges'] = []
+
+  const nameToId: Record<string, string> = {}
   for (const [id, char] of Object.entries(CHARACTERS)) {
-    result[id] = {}
-    for (const stat of char.stats) {
-      result[id][stat.key] = stat.initial
+    nameToId[char.name] = id
+  }
+
+  // Track 1: NPC stat changes — 【角色名 属性名±N】
+  const npcRegex = /[【\[]([^】\]]+?)\s+([^±+\-】\]]+?)([+-])(\d+)[】\]]/g
+  let match
+  while ((match = npcRegex.exec(content))) {
+    const [, charName, statAlias, sign, numStr] = match
+    if (charName === '玩家') continue
+    const delta = parseInt(numStr) * (sign === '+' ? 1 : -1)
+    const npcId = nameToId[charName]
+    if (npcId) {
+      const char = CHARACTERS[npcId]
+      const statCfg = char.stats.find((s) => s.alias === statAlias || s.label === statAlias)
+      if (statCfg) {
+        npcChanges.push({ npcId, key: statCfg.key, delta })
+      }
     }
   }
-  return result
+
+  // Track 2: Player stat changes — 【玩家 属性名±N】
+  const playerRegex = /[【\[]玩家\s+([^±+\-】\]]+?)([+-])(\d+)[】\]]/g
+  let pMatch
+  while ((pMatch = playerRegex.exec(content))) {
+    const [, statName, sign, numStr] = pMatch
+    const delta = parseInt(numStr) * (sign === '+' ? 1 : -1)
+    const keyMap: Record<string, string> = {
+      '健康值': 'health', '洞察力': 'insight', '自主性': 'autonomy',
+      '希望值': 'hope', '技艺': 'artSkill',
+    }
+    const key = keyMap[statName]
+    if (key) playerChanges.push({ key, delta })
+  }
+
+  // Items — 【获得道具：道具名】
+  // (handled separately in sendMessage)
+
+  return { npcChanges, playerChanges }
 }
 
-function clamp(val: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, val))
+// ── buildSystemPrompt — Script-through ───────────────
+
+function buildSystemPrompt(state: GameState): string {
+  const char = state.currentCharacter ? CHARACTERS[state.currentCharacter] : null
+  const chapter = getChapterByMonth(state.currentMonth)
+  const scene = SCENES[state.currentScene]
+  const time = getTimeDisplay(state.currentMonth)
+
+  const npcStatus = state.unlockedCharacters
+    .map((id) => {
+      const c = CHARACTERS[id]
+      if (!c) return ''
+      const stats = c.stats.map((s) => `${s.label}:${state.npcStats[id]?.[s.key] ?? 0}`).join(' ')
+      return `${c.name}(${c.title}): ${stats}`
+    })
+    .filter(Boolean).join('\n')
+
+  const evtNames = state.triggeredEvents
+    .map((id) => EVENTS[id]?.name)
+    .filter(Boolean).join('、')
+
+  const itemNames = state.inventory
+    .map((id) => ITEMS[id])
+    .filter(Boolean)
+    .map((i) => `${i.icon}${i.name}`)
+    .join('、')
+
+  let prompt = `你是《${STORY_INFO.title}》的AI叙述者。
+
+## 游戏剧本
+${GAME_SCRIPT}
+
+## 当前状态
+玩家「阿莱克西斯」
+第${time.year}年 第${time.monthInYear}月（${time.age}岁，距17岁还有${time.remaining}月）
+时段：${TIME_SLOT_LABELS[state.currentTimeSlot]}
+章节：${chapter.name}「${chapter.subtitle}」— ${chapter.theme}
+场景：${scene?.name} — ${scene?.description}
+健康值：${state.playerStats.health}/100
+
+## NPC 状态
+${npcStatus}
+
+## 已触发事件
+${evtNames || '无'}
+
+## 持有道具
+${itemNames || '无'}
+
+## 历史摘要
+${state.historySummary || '旅程刚刚开始'}`
+
+  if (char) {
+    const charStats = char.stats.map((s) => {
+      const val = state.npcStats[char.id]?.[s.key] ?? 0
+      const level = getStatLevel(char, s.key, val)
+      return `${s.label}: ${val}${level ? ` (${level.label})` : ''}`
+    }).join('、')
+
+    const currentLevel = char.favorLevels.find((l) => {
+      const val = state.npcStats[char.id]?.[char.stats[0]?.key] ?? 0
+      return val >= l.range[0] && val <= l.range[1]
+    })
+
+    prompt += `
+
+## 当前互动角色
+- 姓名：${char.name}（${char.nameEn}，${char.title}，${char.age}岁）
+- 性格：${char.personality.core}
+- 说话风格：${char.personality.speakStyle}
+- 口头禅：${char.personality.catchphrases.join('、')}
+- 当前数值：${charStats}
+- 秘密动机：${char.secret.hiddenMotivation}
+- 内心真相：${char.secret.trueSelf}
+- 创伤背景：${char.secret.pastTrauma}
+${currentLevel ? `\n根据当前关系等级「${currentLevel.label}」调整行为：${currentLevel.behavior}` : ''}`
+  }
+
+  return prompt
 }
 
-// ============================================================
-// Store
-// ============================================================
+// ── Chain Reactions ──────────────────────────────────
 
-export const useGameStore = create<GameState & GameActions>()(
+function applyChainReactions(s: GameState): void {
+  // 占有欲≥80 → 信任-5
+  const possessiveness = s.npcStats['kallias']?.['possessiveness'] ?? 0
+  if (possessiveness >= 80) {
+    s.npcStats['kallias']['trust'] = clamp((s.npcStats['kallias']['trust'] ?? 0) - 5, 0, 100)
+  }
+
+  // 威胁≥70 + 信任≤20 → 危机
+  const threat = s.npcStats['philokles']?.['threat'] ?? 0
+  const trust = s.npcStats['kallias']?.['trust'] ?? 0
+  if (threat >= 70 && trust <= 20) {
+    // Crisis state — handled by ending check
+  }
+
+  // 希望≤20 → 心理危机
+  if (s.playerStats.hope <= 20) {
+    trackMentalCrisis(s.playerStats.hope)
+  }
+}
+
+// ── Store ────────────────────────────────────────────
+
+export const useGameStore = create<GameStore>()(
   immer((set, get) => ({
-    /* --- 初始状态 --- */
+    // ── Initial state ──
     gameStarted: false,
     currentMonth: 1,
     currentTimeSlot: 'morning' as TimeSlot,
@@ -147,15 +347,20 @@ export const useGameStore = create<GameState & GameActions>()(
     messages: [],
     streamingContent: '',
     isTyping: false,
-    historySummary: null,
+    historySummary: '',
     endingId: null,
     endingData: null,
     showEndingModal: false,
-    choices: {},
+    choices: [],
+    activeTab: 'dialogue',
+    showDashboard: false,
+    showRecords: false,
+    storyRecords: [],
 
-    /* --- 游戏控制 --- */
+    // ── Actions ──
 
     initGame: () => {
+      trackGameStart()
       set((s) => {
         s.gameStarted = true
         s.currentMonth = 1
@@ -173,15 +378,34 @@ export const useGameStore = create<GameState & GameActions>()(
         s.messages = []
         s.streamingContent = ''
         s.isTyping = false
-        s.historySummary = null
+        s.historySummary = ''
         s.endingId = null
         s.endingData = null
         s.showEndingModal = false
-        s.choices = {}
+        s.choices = []
+        s.activeTab = 'dialogue'
+        s.showDashboard = false
+        s.showRecords = false
+        s.storyRecords = []
+
+        const chapter = CHAPTERS[0]
+        s.messages.push({
+          id: makeId(),
+          role: 'system',
+          content: chapter.enterText,
+          timestamp: Date.now(),
+        })
+
+        s.storyRecords.push({
+          id: `sr-${Date.now()}`,
+          month: 1,
+          timeSlot: '上午',
+          title: '初入宅邸',
+          content: '阿莱克西斯被带入卡利阿斯的宅邸，旅程从此刻开始。',
+        })
+
+        s.choices = ['观察卧室环境', '走出卧室探索', '等待卡利阿斯出现', '检查自己的物品']
       })
-      trackGameStart()
-      const chapter = CHAPTERS[0]
-      get().addSystemMessage(chapter.enterText)
     },
 
     resetGame: () => {
@@ -192,44 +416,89 @@ export const useGameStore = create<GameState & GameActions>()(
         s.endingId = null
         s.endingData = null
         s.showEndingModal = false
+        s.choices = []
+        s.activeTab = 'dialogue'
+        s.showDashboard = false
+        s.showRecords = false
+        s.storyRecords = []
       })
     },
 
-    /* --- 时间推进 --- */
+    // ── 时间推进 ──
 
     advanceMonth: () => {
       const state = get()
-      if (state.currentMonth >= GAME_CONFIG.MAX_MONTHS) {
+      if (state.currentMonth >= MAX_MONTHS) {
         get().checkEnding()
         return
       }
 
-      set((s) => { s.currentMonth++ })
-      const newMonth = get().currentMonth
+      set((s) => {
+        s.currentMonth++
 
-      /* 章节边界检查 */
-      const newChapter = getChapterByMonth(newMonth)
-      if (newChapter.id !== get().currentChapter) {
-        set((s) => { s.currentChapter = newChapter.id })
-        get().addSystemMessage(`\n—— ${newChapter.name}：${newChapter.subtitle} ——\n\n${newChapter.enterText}`)
-      }
+        // Rotate time slot
+        const currentIdx = TIME_SLOTS.indexOf(s.currentTimeSlot)
+        s.currentTimeSlot = TIME_SLOTS[(currentIdx + 1) % TIME_SLOTS.length]
 
-      /* 强制事件检查 */
-      for (const evt of Object.values(EVENTS)) {
-        if (evt.type !== 'forced') continue
-        if (get().triggeredEvents.includes(evt.id)) continue
-        if (evt.trigger.month && evt.trigger.month === newMonth) {
-          get().triggerEvent(evt.id)
-          if (evt.lockPlayer) {
-            set((s) => { s.activeForceEvent = evt.id })
+        trackTimeAdvance(s.currentMonth, TIME_SLOT_LABELS[s.currentTimeSlot])
+
+        // Chapter boundary check
+        const newChapter = getChapterByMonth(s.currentMonth)
+        if (newChapter.id !== s.currentChapter) {
+          s.currentChapter = newChapter.id
+          trackChapterEnter(newChapter.id)
+
+          s.messages.push({
+            id: makeId(),
+            role: 'system',
+            content: `— ${newChapter.name}「${newChapter.subtitle}」—\n\n${newChapter.enterText}`,
+            timestamp: Date.now(),
+            type: 'chapter-change',
+            monthInfo: {
+              month: s.currentMonth,
+              timeSlot: TIME_SLOT_LABELS[s.currentTimeSlot],
+              chapter: `${newChapter.name}·${newChapter.subtitle}`,
+            },
+          })
+
+          s.storyRecords.push({
+            id: `sr-${Date.now()}-ch`,
+            month: s.currentMonth,
+            timeSlot: TIME_SLOT_LABELS[s.currentTimeSlot],
+            title: `进入${newChapter.name}`,
+            content: newChapter.subtitle,
+          })
+        }
+
+        // Forced events
+        for (const evt of Object.values(EVENTS)) {
+          if (evt.type !== 'forced') continue
+          if (s.triggeredEvents.includes(evt.id)) continue
+          if (evt.trigger.month && evt.trigger.month === s.currentMonth) {
+            s.triggeredEvents.push(evt.id)
+            s.messages.push({
+              id: makeId(),
+              role: 'system',
+              content: `📜 事件触发：**${evt.name}**\n\n${evt.description}`,
+              timestamp: Date.now(),
+            })
+            if (evt.lockPlayer) s.activeForceEvent = evt.id
+
+            s.storyRecords.push({
+              id: `sr-${Date.now()}-evt`,
+              month: s.currentMonth,
+              timeSlot: TIME_SLOT_LABELS[s.currentTimeSlot],
+              title: evt.name,
+              content: evt.description,
+            })
           }
         }
-      }
+      })
 
       get().checkConditionalEvents()
       get().checkUnlocks()
 
-      if (newMonth >= GAME_CONFIG.MAX_MONTHS) {
+      if (get().currentMonth >= MAX_MONTHS) {
         get().checkEnding()
       }
     },
@@ -238,22 +507,44 @@ export const useGameStore = create<GameState & GameActions>()(
       set((s) => { s.currentTimeSlot = slot })
     },
 
-    /* --- NPC & 场景 --- */
+    // ── NPC & 场景 ──
 
     selectCharacter: (id) => {
-      set((s) => { s.currentCharacter = id })
+      set((s) => {
+        s.currentCharacter = id
+        s.activeTab = 'dialogue'
+      })
     },
 
     selectScene: (id) => {
-      set((s) => { s.currentScene = id; s.currentCharacter = null })
-      const scene = SCENES[id]
-      if (scene) get().addSystemMessage(`你来到了${scene.icon} ${scene.name}。\n\n${scene.description}`)
+      const state = get()
+      if (!state.unlockedScenes.includes(id)) return
+      if (state.currentScene === id) return
+
+      trackSceneUnlock(id)
+
+      set((s) => {
+        s.currentScene = id
+        s.currentCharacter = null
+        s.activeTab = 'dialogue'
+
+        const scene = SCENES[id]
+        if (scene) {
+          s.messages.push({
+            id: makeId(),
+            role: 'system',
+            content: `你来到了${scene.name}。\n\n${scene.description}`,
+            timestamp: Date.now(),
+            type: 'scene-transition',
+            sceneId: id,
+          })
+        }
+      })
     },
 
     checkUnlocks: () => {
       const state = get()
       set((s) => {
-        /* NPC 解锁 */
         for (const [id, char] of Object.entries(CHARACTERS)) {
           if (s.unlockedCharacters.includes(id)) continue
           const cond = char.unlockCondition
@@ -269,7 +560,6 @@ export const useGameStore = create<GameState & GameActions>()(
           }
         }
 
-        /* 场景解锁 */
         for (const [id, scene] of Object.entries(SCENES)) {
           if (s.unlockedScenes.includes(id)) continue
           const ac = scene.accessCondition
@@ -287,7 +577,7 @@ export const useGameStore = create<GameState & GameActions>()(
       })
     },
 
-    /* --- 数值 --- */
+    // ── 数值 ──
 
     updateNpcStat: (npcId, key, delta) => {
       set((s) => {
@@ -299,13 +589,13 @@ export const useGameStore = create<GameState & GameActions>()(
 
     updatePlayerStat: (key, delta) => {
       set((s) => {
-        const k = key as keyof typeof s.playerStats
+        const k = key as keyof PlayerStats
         if (s.playerStats[k] === undefined) return
         s.playerStats[k] = clamp(s.playerStats[k] + delta, 0, 100)
       })
     },
 
-    /* --- 道具 --- */
+    // ── 道具 ──
 
     addItem: (itemId) => {
       set((s) => {
@@ -319,7 +609,7 @@ export const useGameStore = create<GameState & GameActions>()(
 
     hasItem: (itemId) => get().inventory.includes(itemId),
 
-    /* --- 事件 --- */
+    // ── 事件 ──
 
     triggerEvent: (eventId) => {
       const evt = EVENTS[eventId]
@@ -349,101 +639,178 @@ export const useGameStore = create<GameState & GameActions>()(
         if (t.item && !state.inventory.includes(t.item)) match = false
         if (t.event && !state.triggeredEvents.includes(t.event)) match = false
 
-        if (match) get().triggerEvent(evt.id)
+        if (match) {
+          get().triggerEvent(evt.id)
+
+          set((s) => {
+            s.storyRecords.push({
+              id: `sr-${Date.now()}-ce`,
+              month: s.currentMonth,
+              timeSlot: TIME_SLOT_LABELS[s.currentTimeSlot],
+              title: evt.name,
+              content: evt.description,
+            })
+          })
+        }
       }
     },
 
-    /* --- 选择记录 --- */
-
-    recordChoice: (key, value) => {
-      set((s) => { s.choices[key] = value })
-    },
-
-    /* --- SSE 流式消息 --- */
+    // ── SSE 流式消息 ──
 
     sendMessage: async (text: string) => {
       const state = get()
+      if (state.isTyping || state.endingId) return
+
       const char = state.currentCharacter ? CHARACTERS[state.currentCharacter] : null
 
       set((s) => {
-        s.messages.push({ id: makeId(), role: 'user', content: text, isPlayerAction: true, timestamp: Date.now() })
+        s.messages.push({
+          id: makeId(),
+          role: 'user',
+          content: text,
+          timestamp: Date.now(),
+        })
         s.isTyping = true
         s.streamingContent = ''
         s.activeForceEvent = null
       })
 
-      /* 超过 15 条自动压缩 */
-      if (state.messages.length > 15) {
-        await compressHistory(get, set)
+      // Compress history if needed
+      const currentState = get()
+      if (currentState.messages.length > HISTORY_COMPRESS_THRESHOLD) {
+        const oldMessages = currentState.messages.slice(0, -10)
+        const summary = oldMessages
+          .filter((m) => m.role !== 'system' || m.type)
+          .map((m) => `[${m.role}] ${m.content.slice(0, 80)}`)
+          .join('\n')
+
+        set((s) => {
+          s.historySummary = (s.historySummary + '\n' + summary).slice(-2000)
+          s.messages = s.messages.slice(-10)
+        })
       }
 
       try {
-        const systemPrompt = buildSystemPrompt(get())
-        const recentMessages = get().messages.slice(-20).map((m) => ({
-          role: m.role as 'user' | 'assistant' | 'system',
-          content: m.content,
-        }))
+        const promptState = get()
+        const systemPrompt = buildSystemPrompt(promptState)
+        const recentMessages = promptState.messages
+          .filter((m) => !m.type)
+          .slice(-10)
+          .map((m) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
 
         const apiMessages = [
           { role: 'system' as const, content: systemPrompt },
           ...recentMessages,
         ]
 
-        let accumulated = ''
+        let fullContent = ''
 
         await streamChat(
           apiMessages,
-          (chunk) => {
-            accumulated += chunk
-            set((s) => { s.streamingContent = accumulated })
+          (chunk: string) => {
+            fullContent += chunk
+            set((s) => { s.streamingContent = fullContent })
           },
-          () => { /* done */ }
+          () => {},
         )
 
-        if (!accumulated) {
+        if (!fullContent) {
           const fallbacks = char
             ? [`【${char.name}】（看了你一眼）\u201c有什么事吗？\u201d`, `【${char.name}】（沉默片刻）\u201c……\u201d`]
             : ['大理石柱廊间传来悠远的笛声。', '橄榄叶在风中沙沙作响。']
-          accumulated = fallbacks[Math.floor(Math.random() * fallbacks.length)]
+          fullContent = fallbacks[Math.floor(Math.random() * fallbacks.length)]
         }
 
-        /* 解析 NPC 数值变化: 【角色名 属性名±N】 */
-        const statMatches = accumulated.match(/【([^】]+)\s+([^±+\-】]+)([+-]\d+)】/g)
-        if (statMatches) {
-          for (const match of statMatches) {
-            const parts = match.match(/【([^】]+)\s+([^±+\-】]+)([+-]\d+)】/)
-            if (parts) {
-              const npcName = parts[1]
-              const statAlias = parts[2]
-              const delta = parseInt(parts[3])
-              /* 查找 NPC */
-              for (const [npcId, npc] of Object.entries(CHARACTERS)) {
-                if (npc.name !== npcName) continue
-                const statCfg = npc.stats.find((s) => s.alias === statAlias || s.label === statAlias)
-                if (statCfg) get().updateNpcStat(npcId, statCfg.key, delta)
-              }
+        // Parse stat changes
+        const { npcChanges, playerChanges } = parseStatChanges(fullContent)
+
+        // Detect character for NPC bubble
+        const { charColor } = parseStoryParagraph(fullContent)
+        let detectedChar: string | null = null
+        if (charColor) {
+          for (const [id, c] of Object.entries(CHARACTERS)) {
+            if (c.themeColor === charColor) {
+              detectedChar = id
+              break
             }
           }
         }
 
-        /* 解析玩家数值变化: 【玩家 属性名±N】 */
-        const playerStatMatches = accumulated.match(/【玩家\s+([^±+\-】]+)([+-]\d+)】/g)
-        if (playerStatMatches) {
-          for (const match of playerStatMatches) {
-            const parts = match.match(/【玩家\s+([^±+\-】]+)([+-]\d+)】/)
-            if (parts) {
-              const keyMap: Record<string, string> = {
-                '健康值': 'health', '洞察力': 'insight', '自主性': 'autonomy',
-                '希望值': 'hope', '技艺': 'artSkill',
-              }
-              const key = keyMap[parts[1]]
-              if (key) get().updatePlayerStat(key, parseInt(parts[2]))
+        // Extract choices from AI response
+        const { cleanContent, choices: parsedChoices } = extractChoices(fullContent)
+
+        // Parse items
+        const itemMatches = fullContent.match(/【获得道具[：:]([^】]+)】/g)
+
+        // Parse events
+        const eventMatches = fullContent.match(/【事件[：:]([^】]+)】/g)
+
+        // Fallback choices
+        const finalChoices = parsedChoices.length >= 2 ? parsedChoices : (() => {
+          const cs = get()
+          const c2 = cs.currentCharacter ? CHARACTERS[cs.currentCharacter] : null
+          if (c2) {
+            return [
+              `继续和${c2.name}交谈`,
+              `向${c2.name}询问信息`,
+              `观察${c2.name}的反应`,
+              '环顾四周',
+            ]
+          }
+          const sc = SCENES[cs.currentScene]
+          return [
+            `探索${sc?.name || '周围'}`,
+            '与人交谈',
+            '查看物品',
+            '休息片刻',
+          ]
+        })()
+
+        set((s) => {
+          // Apply NPC stat changes
+          for (const change of npcChanges) {
+            if (s.npcStats[change.npcId]) {
+              const current = s.npcStats[change.npcId][change.key] ?? 0
+              s.npcStats[change.npcId][change.key] = clamp(current + change.delta, 0, 100)
             }
           }
-        }
 
-        /* 解析道具获得: 【获得道具：道具名】 */
-        const itemMatches = accumulated.match(/【获得道具[：:]([^】]+)】/g)
+          // Apply player stat changes
+          for (const change of playerChanges) {
+            const k = change.key as keyof PlayerStats
+            if (s.playerStats[k] !== undefined) {
+              s.playerStats[k] = clamp(s.playerStats[k] + change.delta, 0, 100)
+            }
+          }
+
+          // Chain reactions
+          applyChainReactions(s)
+
+          // Push assistant message
+          s.messages.push({
+            id: makeId(),
+            role: 'assistant',
+            content: cleanContent,
+            timestamp: Date.now(),
+            character: detectedChar || state.currentCharacter || undefined,
+          })
+
+          s.choices = finalChoices.slice(0, 4)
+
+          // Record
+          s.storyRecords.push({
+            id: `sr-${Date.now()}`,
+            month: s.currentMonth,
+            timeSlot: TIME_SLOT_LABELS[s.currentTimeSlot],
+            title: text.slice(0, 20) + (text.length > 20 ? '...' : ''),
+            content: cleanContent.slice(0, 100) + '...',
+          })
+
+          s.isTyping = false
+          s.streamingContent = ''
+        })
+
+        // Handle items
         if (itemMatches) {
           for (const match of itemMatches) {
             const name = match.match(/【获得道具[：:]([^】]+)】/)?.[1]
@@ -454,8 +821,7 @@ export const useGameStore = create<GameState & GameActions>()(
           }
         }
 
-        /* 解析事件触发: 【事件：事件名】 */
-        const eventMatches = accumulated.match(/【事件[：:]([^】]+)】/g)
+        // Handle events
         if (eventMatches) {
           for (const match of eventMatches) {
             const name = match.match(/【事件[：:]([^】]+)】/)?.[1]
@@ -466,55 +832,52 @@ export const useGameStore = create<GameState & GameActions>()(
           }
         }
 
-        set((s) => {
-          s.messages.push({
-            id: makeId(), role: 'assistant', content: accumulated,
-            characterId: state.currentCharacter ?? undefined,
-            characterName: char?.name ?? '叙事',
-            characterColor: char?.themeColor ?? '#CD7F32',
-            isNarrative: true, timestamp: Date.now(),
-          })
-          s.isTyping = false
-          s.streamingContent = ''
-        })
-
-        /* 每次对话后推进时间 */
+        // Advance time
         get().advanceMonth()
+
+        // Auto-save
+        get().saveGame()
 
       } catch {
         set((s) => {
+          s.isTyping = false
+          s.streamingContent = ''
           s.messages.push({
-            id: makeId(), role: 'assistant',
+            id: makeId(),
+            role: 'assistant',
             content: char
               ? `【${char.name}】（似乎在想什么）\u201c……\u201d`
               : '远处传来海潮般的声响。大理石柱在月光下泛着冷光。',
-            characterId: state.currentCharacter ?? undefined,
-            isNarrative: true, timestamp: Date.now(),
+            timestamp: Date.now(),
+            character: state.currentCharacter || undefined,
           })
-          s.isTyping = false
-          s.streamingContent = ''
         })
       }
     },
 
     addSystemMessage: (content) => {
       set((s) => {
-        s.messages.push({ id: makeId(), role: 'system', content, characterName: '旁白', characterColor: '#CD7F32', timestamp: Date.now() })
+        s.messages.push({
+          id: makeId(),
+          role: 'system',
+          content,
+          timestamp: Date.now(),
+        })
       })
     },
 
-    /* --- 结局判定 --- */
+    // ── 结局判定 ──
 
     checkEnding: () => {
       const state = get()
-      /* 按 priority 排序（低优先级数字 = 高优先） */
+      if (state.endingId) return
+
       const sorted = [...ENDINGS].sort((a, b) => a.priority - b.priority)
 
       for (const ending of sorted) {
         const c = ending.conditions
         let match = true
 
-        /* stats 条件 */
         if (c.stats) {
           for (const sc of c.stats) {
             const val = state.npcStats[sc.target]?.[sc.key] ?? 0
@@ -523,21 +886,18 @@ export const useGameStore = create<GameState & GameActions>()(
           }
         }
 
-        /* items 条件 */
         if (c.items) {
           for (const itemId of c.items) {
             if (!state.inventory.includes(itemId)) match = false
           }
         }
 
-        /* events 条件 */
         if (c.events) {
           for (const evtId of c.events) {
             if (!state.triggeredEvents.includes(evtId)) match = false
           }
         }
 
-        /* eventsNot 条件 */
         if (c.eventsNot) {
           for (const evtId of c.eventsNot) {
             if (state.triggeredEvents.includes(evtId)) match = false
@@ -545,6 +905,7 @@ export const useGameStore = create<GameState & GameActions>()(
         }
 
         if (match) {
+          trackEndingReached(ending.id)
           set((s) => {
             s.endingId = ending.id
             s.endingData = ending
@@ -554,8 +915,9 @@ export const useGameStore = create<GameState & GameActions>()(
         }
       }
 
-      /* 无匹配 → 默认结局 (NE-2) */
+      // Fallback
       const fallback = ENDINGS.find((e) => e.id === 'NE-2')!
+      trackEndingReached(fallback.id)
       set((s) => {
         s.endingId = fallback.id
         s.endingData = fallback
@@ -563,7 +925,31 @@ export const useGameStore = create<GameState & GameActions>()(
       })
     },
 
-    /* --- 存档 --- */
+    // ── Tab / Drawer ──
+
+    setActiveTab: (tab) => {
+      set((s) => {
+        s.activeTab = tab
+        s.showDashboard = false
+        s.showRecords = false
+      })
+    },
+
+    toggleDashboard: () => {
+      set((s) => {
+        s.showDashboard = !s.showDashboard
+        if (s.showDashboard) s.showRecords = false
+      })
+    },
+
+    toggleRecords: () => {
+      set((s) => {
+        s.showRecords = !s.showRecords
+        if (s.showRecords) s.showDashboard = false
+      })
+    },
+
+    // ── 存档 ──
 
     saveGame: () => {
       const s = get()
@@ -579,17 +965,22 @@ export const useGameStore = create<GameState & GameActions>()(
         playerStats: s.playerStats,
         inventory: s.inventory,
         triggeredEvents: s.triggeredEvents,
-        choices: s.choices,
         messages: s.messages.slice(-30),
+        historySummary: s.historySummary,
+        storyRecords: s.storyRecords.slice(-50),
+        endingId: s.endingId,
       }
-      localStorage.setItem(SAVE_KEY, JSON.stringify(save))
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(save))
+      } catch { /* 静默 */ }
     },
 
     loadGame: () => {
-      const raw = localStorage.getItem(SAVE_KEY)
-      if (!raw) return
       try {
+        const raw = localStorage.getItem(SAVE_KEY)
+        if (!raw) return false
         const save = JSON.parse(raw)
+
         set((s) => {
           s.gameStarted = true
           s.currentMonth = save.currentMonth
@@ -603,142 +994,30 @@ export const useGameStore = create<GameState & GameActions>()(
           s.playerStats = save.playerStats
           s.inventory = save.inventory
           s.triggeredEvents = save.triggeredEvents
-          s.choices = save.choices || {}
-          s.messages = save.messages
+          s.messages = save.messages || []
+          s.historySummary = save.historySummary || ''
+          s.storyRecords = save.storyRecords || []
+          s.endingId = save.endingId || null
         })
         trackGameContinue()
-      } catch { /* 损坏的存档 */ }
+        return true
+      } catch {
+        return false
+      }
     },
 
-    hasSave: () => !!localStorage.getItem(SAVE_KEY),
-  }))
+    hasSave: () => {
+      try {
+        return !!localStorage.getItem(SAVE_KEY)
+      } catch {
+        return false
+      }
+    },
+
+    clearSave: () => {
+      try {
+        localStorage.removeItem(SAVE_KEY)
+      } catch { /* 静默 */ }
+    },
+  })),
 )
-
-// ============================================================
-// 上下文压缩
-// ============================================================
-
-async function compressHistory(
-  get: () => GameState & GameActions,
-  set: (fn: (s: GameState) => void) => void
-) {
-  const msgs = get().messages
-  if (msgs.length <= 15) return
-
-  const toCompress = msgs.slice(0, -10)
-  const text = toCompress.map((m) => `[${m.role}]: ${m.content}`).join('\n')
-
-  try {
-    const summary = await chat([
-      { role: 'system', content: '你是一个历史生存模拟游戏的叙事压缩器。请将以下对话历史压缩为简洁的叙事摘要（200字以内），保留关键事件、NPC关系变化和道具获取。' },
-      { role: 'user', content: text },
-    ])
-
-    if (summary) {
-      set((s) => {
-        const kept = s.messages.slice(-10)
-        s.messages = [
-          { id: makeId(), role: 'system', content: `[剧情回顾] ${summary}`, timestamp: Date.now() },
-          ...kept,
-        ]
-        s.historySummary = summary
-      })
-    }
-  } catch { /* 压缩失败不影响主流程 */ }
-}
-
-// ============================================================
-// System Prompt
-// ============================================================
-
-function buildSystemPrompt(state: GameState): string {
-  const scene = SCENES[state.currentScene]
-  const char = state.currentCharacter ? CHARACTERS[state.currentCharacter] : null
-  const time = getTimeDisplay(state.currentMonth)
-  const chapter = getChapterByMonth(state.currentMonth)
-
-  /* 所有已解锁 NPC 状态 */
-  const npcStatus = state.unlockedCharacters
-    .map((id) => {
-      const c = CHARACTERS[id]
-      if (!c) return ''
-      const stats = c.stats.map((s) => `${s.label}:${state.npcStats[id]?.[s.key] ?? 0}`).join(' ')
-      return `${c.name}(${c.title}): ${stats}`
-    })
-    .filter(Boolean).join('\n')
-
-  /* 已触发事件 */
-  const evtNames = state.triggeredEvents
-    .map((id) => EVENTS[id]?.name)
-    .filter(Boolean).join('、')
-
-  /* 持有道具 */
-  const itemNames = state.inventory
-    .map((id) => ITEMS[id])
-    .filter(Boolean)
-    .map((i) => `${i.icon}${i.name}`)
-    .join('、')
-
-  let prompt = `你是古希腊历史生存模拟游戏《青铜之笼》的 AI 叙述者。
-
-## 游戏背景
-公元前432年，雅典。玩家扮演12岁色雷斯少年阿莱克西斯（Alexis），被父亲出售给雅典贵族卡利阿斯作为 erômenos。游戏跨越5年（60个月），玩家需要在庇护与掌控之间寻找生存之道。
-
-## 当前状态
-- 时间：第${time.year}年 第${time.monthInYear}个月（阿莱克西斯${time.age}岁，距17岁还有${time.remaining}个月）
-- 时段：${TIME_SLOT_LABELS[state.currentTimeSlot]}
-- 章节：${chapter.name}「${chapter.subtitle}」— ${chapter.theme}
-- 场景：${scene?.name} — ${scene?.description}
-- 健康值：${state.playerStats.health}/100
-
-## NPC 状态
-${npcStatus}
-
-## 已触发事件
-${evtNames || '无'}
-
-## 持有道具
-${itemNames || '无'}
-
-## 叙述规则
-- 用古典希腊风格叙事，融合诗意与克制
-- 角色对话用【角色名】标记，动作用（）包裹
-- 数值变化用【角色名 属性名±N】标注（如【卡利阿斯 好感度+5】）
-- 玩家数值变化用【玩家 属性名±N】标注（如【玩家 健康值-10】）
-- 获得道具用【获得道具：道具名】标注
-- 触发事件用【事件：事件名】标注
-- 每段回复 200-400 字
-- 结尾提供 2-3 个行动建议`
-
-  if (char) {
-    const charStats = char.stats.map((s) => {
-      const val = state.npcStats[char.id]?.[s.key] ?? 0
-      const level = getStatLevel(char, s.key, val)
-      return `${s.label}: ${val}${level ? ` (${level.label})` : ''}`
-    }).join('、')
-
-    const currentLevel = char.favorLevels.find((l) => {
-      const val = state.npcStats[char.id]?.[char.stats[0]?.key] ?? 0
-      return val >= l.range[0] && val <= l.range[1]
-    })
-
-    prompt += `
-
-## 当前互动角色
-- 姓名：${char.name}（${char.nameEn}，${char.title}，${char.age}岁）
-- 性格：${char.personality.core}
-- 说话风格：${char.personality.speakStyle}
-- 口头禅：${char.personality.catchphrases.join('、')}
-- 当前数值：${charStats}
-- 秘密动机：${char.secret.hiddenMotivation}
-- 内心真相：${char.secret.trueSelf}
-- 创伤背景：${char.secret.pastTrauma}
-${currentLevel ? `\n根据当前关系等级「${currentLevel.label}」调整行为：${currentLevel.behavior}` : ''}`
-  }
-
-  if (state.historySummary) {
-    prompt += `\n\n## 历史剧情摘要\n${state.historySummary}`
-  }
-
-  return prompt
-}

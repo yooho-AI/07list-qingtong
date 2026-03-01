@@ -1,0 +1,327 @@
+/**
+ * [INPUT]: 依赖 globals.css CSS 变量
+ * [OUTPUT]: 青铜之笼开场屏样式 — 古希腊柱纹/雾气/金色标题/角色预览/按钮
+ * [POS]: styles 的开场专用样式，App.tsx StartScreen 消费
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+
+/* ================================================================
+   开场屏背景
+   ================================================================ */
+
+.qt-start {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-base) 100%);
+  position: relative;
+  overflow: hidden;
+  overflow-y: auto;
+}
+
+.qt-start-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 希腊柱纹理 */
+.qt-columns {
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect x='20' y='20' width='8' height='160' rx='2' fill='%23CD7F3210'/%3E%3Crect x='60' y='30' width='6' height='140' rx='2' fill='%23CD7F3208'/%3E%3Crect x='120' y='25' width='7' height='150' rx='2' fill='%23CD7F320a'/%3E%3Crect x='170' y='20' width='8' height='160' rx='2' fill='%23CD7F3210'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.4;
+}
+
+/* 中心辐射雾气 */
+.qt-fog {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(26, 22, 18, 0.8) 100%);
+}
+
+/* ================================================================
+   开场内容容器
+   ================================================================ */
+
+.qt-start-content {
+  position: relative;
+  z-index: 1;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* ================================================================
+   标题区域
+   ================================================================ */
+
+.qt-title-section {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.qt-era-badge {
+  display: inline-block;
+  padding: 6px 20px;
+  background: rgba(139, 105, 20, 0.3);
+  border: 1px solid var(--primary);
+  border-radius: 20px;
+  color: var(--primary);
+  font-size: 13px;
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+}
+
+.qt-game-title {
+  margin: 0;
+  font-size: 48px;
+  font-family: var(--font);
+  color: var(--text-primary);
+  letter-spacing: 12px;
+  text-shadow: 0 4px 24px rgba(205, 127, 50, 0.3);
+  animation: qtTitleShimmer 3s ease-in-out infinite;
+}
+
+@keyframes qtTitleShimmer {
+  0%, 100% { text-shadow: 0 4px 24px rgba(205, 127, 50, 0.3); }
+  50% { text-shadow: 0 4px 32px rgba(205, 127, 50, 0.5), 0 0 60px rgba(205, 127, 50, 0.15); }
+}
+
+.qt-game-subtitle {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  letter-spacing: 6px;
+}
+
+.qt-game-desc {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  max-width: 360px;
+  margin-inline: auto;
+}
+
+/* ================================================================
+   角色预览卡
+   ================================================================ */
+
+.qt-char-preview {
+  margin-bottom: 32px;
+}
+
+.qt-preview-grid {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.qt-preview-card {
+  width: 90px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.qt-preview-card:hover {
+  background: rgba(205, 127, 50, 0.1);
+  border-color: var(--primary);
+  transform: translateY(-4px);
+}
+
+/* 圆形立绘头像 */
+.qt-preview-avatar {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.qt-preview-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.qt-preview-name {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.qt-preview-role {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* ================================================================
+   操作按钮
+   ================================================================ */
+
+.qt-start-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.qt-start-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+  color: var(--bg-primary);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: var(--font);
+  letter-spacing: 2px;
+}
+
+.qt-start-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 32px rgba(205, 127, 50, 0.5);
+}
+
+.qt-start-btn:active {
+  transform: scale(0.97);
+}
+
+.qt-continue-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: transparent;
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: var(--font);
+  letter-spacing: 2px;
+}
+
+.qt-continue-btn:hover {
+  background: rgba(139, 105, 20, 0.3);
+}
+
+.qt-continue-btn:active {
+  transform: scale(0.97);
+}
+
+/* ================================================================
+   底部提示
+   ================================================================ */
+
+.qt-tip {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ================================================================
+   开场动画
+   ================================================================ */
+
+/* 柱子缓慢浮动 */
+@keyframes qtColumnsFloat {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.55; }
+}
+
+.qt-columns {
+  animation: qtColumnsFloat 8s ease-in-out infinite;
+}
+
+/* 雾气呼吸 */
+@keyframes qtFogBreathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.qt-fog {
+  animation: qtFogBreathe 6s ease-in-out infinite;
+}
+
+/* 预览卡交错入场 */
+.qt-preview-card {
+  animation: qtCardEnter 0.6s ease-out backwards;
+}
+
+.qt-preview-card:nth-child(1) { animation-delay: 0.1s; }
+.qt-preview-card:nth-child(2) { animation-delay: 0.2s; }
+.qt-preview-card:nth-child(3) { animation-delay: 0.3s; }
+.qt-preview-card:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes qtCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 按钮脉冲光晕 */
+.qt-start-btn {
+  animation: qtBtnGlow 2.5s ease-in-out infinite;
+}
+
+@keyframes qtBtnGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(205, 127, 50, 0); }
+  50% { box-shadow: 0 0 24px rgba(205, 127, 50, 0.35); }
+}
+
+/* ================================================================
+   移动端响应式
+   ================================================================ */
+
+@media (max-width: 430px) {
+  .qt-game-title {
+    font-size: 36px;
+    letter-spacing: 8px;
+  }
+
+  .qt-game-subtitle {
+    font-size: 13px;
+    letter-spacing: 4px;
+  }
+
+  .qt-start-content {
+    padding: 32px 20px;
+  }
+
+  .qt-preview-card {
+    width: 80px;
+  }
+
+  .qt-preview-avatar {
+    width: 44px;
+    height: 44px;
+  }
+}
