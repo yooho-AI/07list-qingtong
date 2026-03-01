@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
-import { DotsSixVertical, Play, Pause, X } from '@phosphor-icons/react'
+import { DotsSixVertical, Play, Pause } from '@phosphor-icons/react'
 import {
   useGameStore, CHARACTERS, SCENES, ITEMS, PLAYER_STATS,
   getTimeDisplay, getChapterByMonth, TIME_SLOT_LABELS,
@@ -50,7 +50,7 @@ export default function DashboardDrawer() {
   const {
     currentMonth, currentTimeSlot, playerStats, npcStats,
     unlockedCharacters, unlockedScenes, inventory, currentScene,
-    currentCharacter, selectCharacter, selectScene, toggleDashboard,
+    currentCharacter, selectCharacter, selectScene, setActiveTab,
   } = useGameStore()
   const { isPlaying: playing, toggle: toggleBGM } = useBgm()
   const [order, setOrder] = useState(loadOrder)
@@ -77,7 +77,7 @@ export default function DashboardDrawer() {
                   <button
                     key={c.id}
                     className={`qt-dash-char-card ${c.id === currentCharacter ? 'active' : ''}`}
-                    onClick={() => { selectCharacter(c.id); toggleDashboard() }}
+                    onClick={() => { selectCharacter(c.id); setActiveTab('dialogue') }}
                   >
                     <img className="qt-dash-char-portrait" src={c.portrait} alt={c.name} />
                     <div className="qt-dash-char-name">{c.name}</div>
@@ -100,7 +100,7 @@ export default function DashboardDrawer() {
                   <button
                     key={s.id}
                     className={`qt-dash-scene-thumb ${isCurrent ? 'qt-dash-scene-active' : ''} ${!unlocked ? 'qt-dash-scene-locked' : ''}`}
-                    onClick={() => { if (unlocked) { selectScene(s.id); toggleDashboard() } }}
+                    onClick={() => { if (unlocked) { selectScene(s.id); setActiveTab('dialogue') } }}
                     disabled={!unlocked}
                   >
                     <img src={s.background} alt={s.name} />
@@ -191,12 +191,7 @@ export default function DashboardDrawer() {
   }
 
   return (
-    <>
-      <div className="qt-dash-header">
-        <h3 className="qt-dash-title">调查笔记</h3>
-        <button className="qt-dash-close" onClick={toggleDashboard}><X size={14} /></button>
-      </div>
-      <div className="qt-dash-scroll">
+    <div className="qt-dash-scroll" style={{ padding: 12 }}>
         {/* Front page (non-draggable) */}
         <div className="qt-dash-front">
           <div className="qt-dash-front-left">
@@ -221,7 +216,6 @@ export default function DashboardDrawer() {
         >
           {order.map(renderSection)}
         </Reorder.Group>
-      </div>
-    </>
+    </div>
   )
 }

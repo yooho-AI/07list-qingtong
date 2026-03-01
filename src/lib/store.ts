@@ -126,7 +126,7 @@ interface GameState {
 
   choices: string[]
 
-  activeTab: 'dialogue' | 'scene' | 'character'
+  activeTab: 'dialogue' | 'scene' | 'character' | 'dashboard' | 'records'
   showDashboard: boolean
   showRecords: boolean
   storyRecords: StoryRecord[]
@@ -158,7 +158,7 @@ interface GameActions {
 
   checkEnding: () => void
 
-  setActiveTab: (tab: 'dialogue' | 'scene' | 'character') => void
+  setActiveTab: (tab: 'dialogue' | 'scene' | 'character' | 'dashboard' | 'records') => void
   toggleDashboard: () => void
   toggleRecords: () => void
 

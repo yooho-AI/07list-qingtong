@@ -1,15 +1,15 @@
 /**
- * [INPUT]: store (activeTab, choices, messages, showDashboard, showRecords, storyRecords), bgm
- * [OUTPUT]: 桌面居中壳 + Header + Tab路由 + 5键TabBar + 三向手势 + 抽屉 + Toast
+ * [INPUT]: store (activeTab, storyRecords, currentMonth, currentTimeSlot), bgm
+ * [OUTPUT]: 桌面居中壳 + Header + Tab路由(5页) + 5键TabBar + Toast
  * [POS]: components/game 的唯一布局入口，App.tsx GameScreen 消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { useRef, useState, useCallback } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Notebook, ChatCircleDots, MapTrifold, Users, Scroll,
-  MusicNotes, SpeakerSimpleSlash, List, X,
+  MusicNotes, SpeakerSimpleSlash, List,
 } from '@phosphor-icons/react'
 import {
   useGameStore, getTimeDisplay, getChapterByMonth,
@@ -27,27 +27,11 @@ interface Props {
 
 export default function AppShell({ onMenuOpen }: Props) {
   const {
-    activeTab, setActiveTab, showDashboard, toggleDashboard,
-    showRecords, toggleRecords, currentMonth, currentTimeSlot,
+    activeTab, setActiveTab, currentMonth, currentTimeSlot,
     storyRecords,
   } = useGameStore()
   const { isPlaying: playing, toggle: toggleBGM } = useBgm()
   const [toast, setToast] = useState('')
-  const touchRef = useRef<{ x: number; y: number } | null>(null)
-
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-  }, [])
-
-  const onTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchRef.current) return
-    const dx = e.changedTouches[0].clientX - touchRef.current.x
-    const dy = e.changedTouches[0].clientY - touchRef.current.y
-    touchRef.current = null
-    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 1.5) return
-    if (dx > 0) toggleDashboard()
-    else toggleRecords()
-  }, [toggleDashboard, toggleRecords])
 
   const time = getTimeDisplay(currentMonth)
   const chapter = getChapterByMonth(currentMonth)
@@ -96,12 +80,13 @@ export default function AppShell({ onMenuOpen }: Props) {
       </div>
 
       {/* Tab Content */}
-      <div
-        className="qt-tab-content"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
+      <div className="qt-tab-content">
         <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} style={{ height: '100%', overflowY: 'auto' }}>
+              <DashboardDrawer />
+            </motion.div>
+          )}
           {activeTab === 'dialogue' && (
             <motion.div key="dialogue" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} style={{ height: '100%' }}>
               <TabDialogue />
@@ -117,72 +102,9 @@ export default function AppShell({ onMenuOpen }: Props) {
               <TabCharacter />
             </motion.div>
           )}
-        </AnimatePresence>
-      </div>
-
-      {/* TabBar */}
-      <nav className="qt-tab-bar">
-        {tabs.map((t) => {
-          const isDrawer = t.key === 'dashboard' || t.key === 'records'
-          const isActive = isDrawer
-            ? (t.key === 'dashboard' ? showDashboard : showRecords)
-            : activeTab === t.key
-          return (
-            <button
-              key={t.key}
-              className={`qt-tab-item ${isActive ? 'qt-tab-active' : ''}`}
-              onClick={() => {
-                if (t.key === 'dashboard') toggleDashboard()
-                else if (t.key === 'records') toggleRecords()
-                else setActiveTab(t.key)
-              }}
-            >
-              <t.Icon size={22} weight={isActive ? 'fill' : 'regular'} />
-              <span>{t.label}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      {/* Dashboard Drawer (left) */}
-      <AnimatePresence>
-        {showDashboard && (
-          <>
-            <motion.div
-              className="qt-dash-overlay"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={toggleDashboard}
-            />
-            <motion.div
-              className="qt-dash-drawer"
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            >
-              <DashboardDrawer />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Record Sheet (right) */}
-      <AnimatePresence>
-        {showRecords && (
-          <>
-            <motion.div
-              className="qt-records-overlay"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={toggleRecords}
-            />
-            <motion.aside
-              className="qt-records-sheet"
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            >
-              <div className="qt-records-header">
-                <h3 className="qt-records-title">事件记录</h3>
-                <button className="qt-records-close" onClick={toggleRecords}><X size={14} /></button>
-              </div>
-              <div className="qt-records-timeline">
+          {activeTab === 'records' && (
+            <motion.div key="records" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} style={{ height: '100%', overflowY: 'auto' }}>
+              <div className="qt-records-timeline" style={{ padding: 12 }}>
                 {[...storyRecords].reverse().map((r) => (
                   <div key={r.id} className="qt-records-item">
                     <div className="qt-records-dot" />
@@ -199,10 +121,24 @@ export default function AppShell({ onMenuOpen }: Props) {
                   </div>
                 )}
               </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* TabBar */}
+      <nav className="qt-tab-bar">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            className={`qt-tab-item ${activeTab === t.key ? 'qt-tab-active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            <t.Icon size={22} weight={activeTab === t.key ? 'fill' : 'regular'} />
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
 
       {/* Toast */}
       {toast && <div className="qt-toast">{toast}</div>}
