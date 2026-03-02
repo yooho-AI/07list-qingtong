@@ -21,5 +21,129 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+      <script>
+    (function(){
+      var KEY='yooho-promo-shown';
+      if(localStorage.getItem(KEY))return;
+      var observer=new MutationObserver(function(){
+        if(!document.querySelector('.qt-shell'))return;
+        observer.disconnect();
+        setTimeout(showPromo,800);
+      });
+      observer.observe(document.getElementById('root'),{childList:true,subtree:true});
+
+      function showPromo(){
+        if(localStorage.getItem(KEY))return;
+        localStorage.setItem(KEY,'1');
+
+        var overlay=document.createElement('div');
+        overlay.id='yooho-promo-overlay';
+        overlay.innerHTML=
+          '<div id="yooho-promo-card">'+
+            '<div id="yooho-promo-glow"></div>'+
+            '<div id="yooho-promo-badge">YOOHO.AI</div>'+
+            '<h2 id="yooho-promo-title">更多 AI 互动游戏</h2>'+
+            '<p id="yooho-promo-desc">现阶段官方 <strong>10+</strong> 款游戏<br>全部免费畅玩中</p>'+
+            '<a id="yooho-promo-cta" href="https://yooho.ai" target="_blank" rel="noopener">免费开玩更多游戏</a>'+
+            '<button id="yooho-promo-skip">先玩这个</button>'+
+          '</div>';
+
+        var style=document.createElement('style');
+        style.textContent=
+          '#yooho-promo-overlay{'+
+            'position:fixed;inset:0;z-index:9999;'+
+            'background:rgba(8,4,18,0.75);'+
+            'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);'+
+            'display:flex;align-items:center;justify-content:center;'+
+            'animation:yoohoFadeIn .35s ease;'+
+            'padding:24px;'+
+          '}'+
+          '#yooho-promo-card{'+
+            'position:relative;overflow:hidden;'+
+            'background:linear-gradient(160deg,#1a0d30,#220f3d,#1a0b2e);'+
+            'border:1px solid rgba(168,85,247,0.25);'+
+            'border-radius:24px;'+
+            'padding:36px 28px 28px;'+
+            'max-width:340px;width:100%;'+
+            'text-align:center;'+
+            'box-shadow:0 20px 60px rgba(0,0,0,0.4),0 0 80px rgba(255,77,141,0.08);'+
+            'animation:yoohoSlideUp .4s cubic-bezier(.34,1.56,.64,1);'+
+          '}'+
+          '#yooho-promo-glow{'+
+            'position:absolute;top:-40%;left:-20%;width:140%;height:100%;'+
+            'background:radial-gradient(ellipse at 50% 0%,rgba(255,77,141,0.12),transparent 60%);'+
+            'pointer-events:none;'+
+          '}'+
+          '#yooho-promo-badge{'+
+            'display:inline-block;position:relative;'+
+            'font-size:11px;font-weight:700;letter-spacing:3px;'+
+            'color:#fbbf24;'+
+            'background:rgba(251,191,36,0.1);'+
+            'border:1px solid rgba(251,191,36,0.2);'+
+            'padding:4px 14px;border-radius:20px;'+
+            'margin-bottom:16px;'+
+          '}'+
+          '#yooho-promo-title{'+
+            'position:relative;'+
+            'font-size:22px;font-weight:800;'+
+            'color:#fff;letter-spacing:1px;'+
+            'margin:0 0 10px;'+
+          '}'+
+          '#yooho-promo-desc{'+
+            'position:relative;'+
+            'font-size:14px;line-height:1.8;'+
+            'color:rgba(255,255,255,0.65);'+
+            'margin:0 0 24px;'+
+          '}'+
+          '#yooho-promo-desc strong{'+
+            'color:#ff4d8d;font-weight:700;font-size:16px;'+
+          '}'+
+          '#yooho-promo-cta{'+
+            'display:block;position:relative;'+
+            'width:100%;padding:14px;'+
+            'background:linear-gradient(135deg,#ff4d8d,#c084fc);'+
+            'color:#fff;font-size:15px;font-weight:700;'+
+            'letter-spacing:2px;'+
+            'border:none;border-radius:50px;'+
+            'text-decoration:none;text-align:center;'+
+            'cursor:pointer;'+
+            'box-shadow:0 0 24px rgba(255,77,141,0.35);'+
+            'transition:transform .15s,box-shadow .15s;'+
+          '}'+
+          '#yooho-promo-cta:active{'+
+            'transform:scale(0.97);'+
+            'box-shadow:0 0 12px rgba(255,77,141,0.25);'+
+          '}'+
+          '#yooho-promo-skip{'+
+            'position:relative;'+
+            'width:100%;margin-top:10px;padding:12px;'+
+            'background:transparent;'+
+            'border:1px solid rgba(255,255,255,0.12);'+
+            'border-radius:50px;'+
+            'color:rgba(255,255,255,0.5);'+
+            'font-size:14px;cursor:pointer;'+
+            'transition:border-color .2s,color .2s;'+
+          '}'+
+          '#yooho-promo-skip:active{'+
+            'border-color:rgba(255,255,255,0.25);'+
+            'color:rgba(255,255,255,0.7);'+
+          '}'+
+          '@keyframes yoohoFadeIn{from{opacity:0}to{opacity:1}}'+
+          '@keyframes yoohoSlideUp{from{opacity:0;transform:translateY(30px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}';
+
+        document.head.appendChild(style);
+        document.body.appendChild(overlay);
+
+        function close(){
+          overlay.style.animation='yoohoFadeIn .25s ease reverse forwards';
+          setTimeout(function(){overlay.remove();style.remove()},250);
+        }
+        document.getElementById('yooho-promo-skip').onclick=close;
+        overlay.addEventListener('click',function(e){
+          if(e.target===overlay)close();
+        });
+      }
+    })();
+    </script>
   </body>
 </html>
