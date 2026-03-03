@@ -298,7 +298,21 @@ ${state.historySummary || '旅程刚刚开始'}`
 - 秘密动机：${char.secret.hiddenMotivation}
 - 内心真相：${char.secret.trueSelf}
 - 创伤背景：${char.secret.pastTrauma}
-${currentLevel ? `\n根据当前关系等级「${currentLevel.label}」调整行为：${currentLevel.behavior}` : ''}`
+${currentLevel ? `\n根据当前关系等级「${currentLevel.label}」调整行为：${currentLevel.behavior}` : ''}
+
+## 数值变化标注（必须严格遵守！）
+每次回复末尾（选项之前）必须标注本次互动产生的所有数值变化，缺一不可：
+- NPC数值变化：【角色名 好感度+N】或【角色名 信任度+N】或【角色名 占有欲+N】等（N通常为3-10）
+- 玩家属性变化：【玩家 健康值+N】【玩家 洞察力+N】【玩家 自主性+N】【玩家 希望值+N】【玩家 技艺+N】
+示例：
+（叙述内容）
+【卡利阿斯 好感度+5】【菲洛克勒斯 信任度+3】【玩家 洞察力+5】【玩家 希望值-2】
+1. 选项一
+2. 选项二
+规则：
+- 每次回复至少产生1个数值变化
+- NPC数值变化必须与当前互动的角色相关
+- 玩家属性至少标注1个变化`
   }
 
   return prompt
