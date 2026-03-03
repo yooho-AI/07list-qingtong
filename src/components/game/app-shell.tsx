@@ -41,8 +41,8 @@ export default function AppShell({ onMenuOpen }: Props) {
 
   const tabs = [
     { key: 'dashboard' as const, Icon: Notebook, label: '手册' },
-    { key: 'dialogue' as const, Icon: ChatCircleDots, label: '对话' },
     { key: 'scene' as const, Icon: MapTrifold, label: '场景' },
+    { key: 'dialogue' as const, Icon: ChatCircleDots, label: '对话' },
     { key: 'character' as const, Icon: Users, label: '人物' },
     { key: 'records' as const, Icon: Scroll, label: '事件' },
   ]

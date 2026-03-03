@@ -23,6 +23,7 @@ import './styles/rich-cards.css'
 
 function StartScreen() {
   const initGame = useGameStore((s) => s.initGame)
+  const sendMessage = useGameStore((s) => s.sendMessage)
   const loadGame = useGameStore((s) => s.loadGame)
   const hasSave = useGameStore((s) => s.hasSave)
 
@@ -59,7 +60,7 @@ function StartScreen() {
         </div>
 
         <div className="qt-start-actions">
-          <button className="qt-start-btn" onClick={() => { initGame(); trackGameStart() }}>
+          <button className="qt-start-btn" onClick={() => { initGame(); trackGameStart(); setTimeout(() => sendMessage('开始游戏'), 500) }}>
             <Play size={18} weight="fill" /> 开始游戏
           </button>
           {hasSave() && (

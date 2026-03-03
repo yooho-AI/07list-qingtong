@@ -477,6 +477,7 @@
 
 /* ── 12. Letter Card — 欢迎信（首条消息） ──────────────── */
 .qt-letter {
+  flex-shrink: 0;
   position: relative; align-self: center; width: 92%; max-width: 340px;
   background: rgba(36, 30, 24, 0.95);
   border: 1px solid var(--border-strong);
