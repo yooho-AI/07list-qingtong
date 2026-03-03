@@ -168,12 +168,12 @@ export default function CharacterChat({
 
       {/* 聊天面板 */}
       <motion.div
-        className="qt-dossier-overlay"
+        className="qt-records-sheet"
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        style={{ display: 'flex', flexDirection: 'column' }}
+        style={{ zIndex: 52, display: 'flex', flexDirection: 'column' }}
       >
         {/* Header */}
         <div className="qt-chat-header">
